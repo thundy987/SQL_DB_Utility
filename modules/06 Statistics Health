@@ -1,0 +1,105 @@
+--Module 6: Statistics Health
+--Purpose: Evaluates how "stale" the statistics are on the sql server instance and orders the results based on how modifed the tables have been since the last time the statistics were updated, as well as identifies tables that have statistics that have never been computed.
+--Scope: The module iterates through all user databases and optionally includes system databases and combines the results into a single temp table.
+--	The iteration is necessary because the statistics information is stored at the database level and there is no built-in DMV that aggregates this information across all databases.
+--	The iteration is completed by dynamically building and executing a SQL statement for each database.
+
+-- Sources:
+--   sys.stats				- Contains a row for each statistics object that exists for the tables
+--   dm_db_stats_properties - Instance level function that returns properties of the statistics
+--   sys.databases          - Allows iteration and filtering of databases based on db name
+--   sys.objects			- Connects table schema/name to the statistics objects
+
+
+-- =============================================
+-- USER CONFIGURATION - adjust to your preferences
+-- =============================================
+DECLARE @include_system_dbs BIT = 1;  -- Set to 1 to include system databases (master, tempdb, model, msdb)
+DECLARE @percent_modified_threshold FLOAT = 30.5; -- Set the percentage threshold for how modified the tables are from the last time the statistics were updated.
+declare @db_name nvarchar (256);
+set @db_name = (Select top 1 name from sys.databases
+WHERE (@include_system_dbs = 1 OR name not in ('master', 'model', 'msdb', 'tempdb')));
+
+IF OBJECT_ID('tempdb.dbo.#all_db_stats') IS NOT NULL
+    DROP TABLE #all_db_stats;
+
+create table #all_db_stats (
+	t_database_name nvarchar (256),
+	t_schema_name nvarchar (256),
+	t_table_name nvarchar (256),
+	t_statistics_name nvarchar (256),
+	t_stats_last_updated_datetime datetime,
+	t_hours_since_last_stats_update int,
+	t_rows_from_latest_stats bigint,
+	t_modification_counter bigint,
+	t_percent_rows_modified_since_last_stats_update float,
+	t_stats_ever_updated_flag nvarchar (100)
+);
+
+While @db_name is not null
+BEGIN
+declare @sql nvarchar(max);
+
+set @sql = N'
+with column_grabs as(
+Select
+	' + '''' + @db_name + '''' + ' AS database_name, -- @db_name concatenated because it cannot be referenced directly (cannot use "use")
+	OBJECT_SCHEMA_NAME(c.object_id) AS schema_name,
+    OBJECT_NAME(c.object_id) AS table_name,	
+	a.name as statistics_name,	
+	b.last_updated as stats_last_updated_datetime,
+	DATEDIFF(hour, b.last_updated, getdate()) as hours_since_last_stats_update,
+	b.rows as rows_from_latest_stats,
+	b.modification_counter,
+	cast(ROUND ((b.modification_counter * 100.0) / NULLIF(b.rows, 0),1) as float) -- nullif to prevent divide by zero.
+	as percent_rows_modified_since_last_stats_update,
+	CASE
+		when b.last_updated is null then ''Statistics have never been updated''
+		else null 
+	END as stats_ever_updated_flag
+FROM ' + @db_name + '.sys.stats AS a
+cross apply sys.dm_db_stats_properties(a.object_id, a.stats_id) as b -- cross apply used to connect the stats properties to the stats objects. Outer apply returned the same results in testing, but cross apply is more efficient when there is a matching row in the stats properties for each stats object
+inner join ' +@db_name+ '.sys.objects AS c 
+	ON a.object_id = c.object_id
+)
+
+Insert into #all_db_stats(
+t_database_name,
+	t_schema_name,
+	t_table_name,
+	t_statistics_name,
+	t_stats_last_updated_datetime,
+	t_hours_since_last_stats_update,
+	t_rows_from_latest_stats,
+	t_modification_counter,
+	t_percent_rows_modified_since_last_stats_update,
+	t_stats_ever_updated_flag
+	)
+Select 
+	database_name,
+	schema_name,
+	table_name,
+	statistics_name,
+	stats_last_updated_datetime,
+	hours_since_last_stats_update,
+	rows_from_latest_stats,
+	modification_counter,
+	percent_rows_modified_since_last_stats_update,
+	stats_ever_updated_flag
+from column_grabs
+where (percent_rows_modified_since_last_stats_update > @percent_modified_threshold) or stats_ever_updated_flag is not null'
+
+EXEC sp_executesql @sql, 
+    N'@percent_modified_threshold FLOAT', 
+    @percent_modified_threshold = @percent_modified_threshold -- not passing it as a value so it is not treated as executable code from a user
+	
+set @db_name =(
+Select top 1 name from sys.databases
+WHERE (@include_system_dbs = 1 
+OR name not in ('master', 'model', 'msdb', 'tempdb')) 
+and name > @db_name
+Order by name)
+END
+
+select * from #all_db_stats
+Order by t_percent_rows_modified_since_last_stats_update desc, t_hours_since_last_stats_update desc;

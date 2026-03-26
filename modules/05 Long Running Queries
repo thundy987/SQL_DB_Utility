@@ -1,0 +1,59 @@
+-- =============================================================================
+-- Module 5: Long Running Queries
+-- =============================================================================
+-- Purpose: Identifies currently executing queries that exceed defined elapsed
+--          time thresholds. Returns session details, resource consumption, and
+--          the associated SQL text to aid in performance troubleshooting.
+--
+-- Scope:   User and application-submitted T-SQL requests only. System background
+--          tasks with no associated SQL text (NULL sql_handle) are intentionally
+--          excluded by the CROSS APPLY behavior, as this module is focused on
+--          query performance rather than internal SQL Server processes.
+-- Sources:
+--   sys.dm_exec_requests  - Active requests currently executing on the instance
+--   sys.dm_exec_sessions  - Session-level details including login name and memory
+--   sys.databases         - Resolves database_id to a readable database name
+--   sys.dm_exec_sql_text  - Table-valued function returning SQL text for a given
+--                           sql_handle. CROSS APPLY excludes NULL sql_handle rows.
+-- Notes:
+--   - total_elapsed_time is stored in milliseconds. Divided by 1000 here to
+--     match user-defined threshold units (seconds).
+--   - memory_usage from dm_exec_sessions is expressed as number of 8KB pages.
+--   - @@SPID filter excludes the session running this query from results.
+--   - Results ordered by elapsed time descending to identify longest runners first.
+-- =============================================================================
+
+-- =============================================
+-- USER CONFIGURATION - adjust thresholds to your preferences
+-- =============================================
+declare @threshold_critical int = 60; -- enter time in seconds
+declare @threshold_warning int = 30; -- enter time in seconds
+
+Select
+	CASE
+		when (a.total_elapsed_time/1000) >= (@threshold_critical) then 'Critical - query running longer than 1 minute'
+		when (a.total_elapsed_time/1000) between @threshold_warning and @threshold_critical then 'Warning - query running longer than 30 seconds'
+		else 'OK'
+	END as alert_flag,
+	b.login_name,
+	a.total_elapsed_time,
+	a.status,
+	a.command,
+	c.name as database_name,
+	a.percent_complete,
+	a.cpu_time,	
+	a.logical_reads,
+	a.writes,
+	b.memory_usage as no_of_8kb_pages_of_memory_used,
+	a.row_count,
+	a.blocking_session_id,		
+	d.text as query_text	
+From sys.dm_exec_requests as a
+inner join sys.dm_exec_sessions as b
+	on a.session_id = b.session_id
+inner join sys.databases as c
+	on a.database_id = c.database_id
+cross apply sys.dm_exec_sql_text(a.sql_handle) as d
+WHERE 
+    a.session_ID != @@SPID -- Exclude the session running this query
+ORDER BY a.total_elapsed_time desc;

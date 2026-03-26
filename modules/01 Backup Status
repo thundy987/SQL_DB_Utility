@@ -1,0 +1,78 @@
+-- ============================================================
+-- MODULE 1: Backup Status
+-- ============================================================
+-- Checks backup health across all databases on the instance.
+-- Surfaces: last full/differential/log backup per database,
+-- time since each backup type, and an alert status flag.
+--
+-- Sources:
+--   msdb.dbo.backupset   - backup history
+--   sys.databases        - recovery model per database
+-- ============================================================
+
+-- ============================================================
+-- USER CONFIGURATION -- adjust thresholds to match your environment
+-- ============================================================
+DECLARE @diff_log_time int = 2;   -- Max hours allowed since last differential or log backup
+DECLARE @full_time     int = 12;  -- Max hours allowed since last full backup
+-- ============================================================
+
+WITH backup_info AS (
+-- Aggregate most recent backup date per database per backup type
+Select 
+	database_name,
+	MAX (
+		CASE 
+			when type = 'D' then backup_finish_date
+			else NULL
+		END
+		) as last_full_backup_date,
+	MAX (
+		CASE 
+			when type = 'I' then backup_finish_date
+			else NULL
+		END
+		) as last_differential_backup,
+	MAX (
+		CASE 
+			when type = 'L' then backup_finish_date
+			else NULL
+		END
+		) as last_full_log_date
+FROM msdb.dbo.backupset
+GROUP BY database_name),
+
+backup_details AS(
+	-- Join to sys.databases to include all databases (even those never backed up)
+	-- and bring in recovery model for alert flag logic
+Select 
+	d.name as database_name,
+	d.recovery_model_desc,
+	bi.last_full_backup_date,
+	bi.last_differential_backup,
+	bi.last_full_log_date,
+	datediff (hour, bi.last_full_backup_date, getdate()) as hours_since_full_backup,
+	datediff (hour, bi.last_differential_backup, getdate()) as hours_since_differential_backup,
+	datediff (hour, bi.last_full_log_date, getdate()) as hours_since_log_backup
+from sys.databases as d
+Left join backup_info as bi
+	on d.name = bi.database_name)
+
+-- Final output with alert flag
+select 
+	*,
+	CASE
+		-- tempdb cannot be backed up, skip it
+		WHEN database_name = 'tempdb' THEN 'Ok'
+		-- No full backup on record
+		when last_full_backup_date is null then 'Full backup never taken!'
+		-- FULL recovery model requires frequent log or differential backups
+		when recovery_model_desc = 'FULL' and (hours_since_differential_backup > @diff_log_time or hours_since_log_backup > @diff_log_time) then 'Take a log backup'
+		-- SIMPLE recovery model only needs full backups monitored
+		when recovery_model_desc = 'SIMPLE' and hours_since_full_backup > @diff_log_time then 'Overdue Full Backup'
+		-- Catch-all for any backup type overdue (covers BULK_LOGGED and edge cases)
+		when hours_since_full_backup > @full_time or hours_since_differential_backup > @full_time or hours_since_log_backup > @full_time then 'Overdue Backup'
+		else 'Ok' 
+	END as backup_alert_status
+FROM backup_details
+ORDER BY backup_alert_status DESC, database_name;

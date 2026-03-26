@@ -1,0 +1,24 @@
+-- =============================================
+-- Module 3: Index Health Monitor
+-- Reports fragmentation levels for all indexes
+-- in the current database and recommends action.
+-- Run against target database to assess index health.
+-- =============================================
+
+SELECT 
+    OBJECT_NAME(tbl.object_id) AS table_name,
+      -- HEAP means the table has no clustered index
+    COALESCE(i.name, 'HEAP') AS index_name,
+    ROUND(tbl.avg_fragmentation_in_percent, 1) as FragmentationPercent,
+    CASE 
+        WHEN tbl.avg_fragmentation_in_percent > 30 THEN 'Rebuild'
+        WHEN tbl.avg_fragmentation_in_percent > 5 THEN 'Reorganize'
+        ELSE 'OK'
+    END AS RecommendedAction
+FROM sys.dm_db_index_physical_stats(DB_ID(), NULL, NULL, NULL, 'LIMITED') AS tbl
+INNER JOIN sys.indexes AS i 
+    ON tbl.object_id = i.object_id 
+    AND tbl.index_id = i.index_id
+-- Excludes healthy indexes, only returns actionable fragmentation
+WHERE tbl.avg_fragmentation_in_percent > 5
+ORDER BY tbl.avg_fragmentation_in_percent DESC;

@@ -1,0 +1,45 @@
+-- =============================================
+-- Module 4: Missing Indexes Monitor
+-- Identifies indexes SQL Server recommends based
+-- on query execution patterns since last restart.
+-- Adjust @priority_threshold to filter low-impact suggestions.
+-- Note: DMV data resets on every SQL Server restart.
+-- =============================================
+
+-- Minimum priority score to report on. Higher = more impactful.
+
+DECLARE @priority_threshold float = 75.0;
+
+WITH cte_missing_indexes AS (
+select 
+	details.statement as table_name,
+	 -- Priority score: frequency * impact * cost. Higher = fix first.
+	ROUND (CAST ((stat.user_seeks + stat.user_scans) * stat.avg_user_impact * stat.avg_total_user_cost AS float), 1)  AS priority,
+	-- Estimated % improvement if index is created
+	ROUND (stat.avg_user_impact, 2) as Estimated_percent_improvement,
+	-- Average cost of queries that triggered this suggestion
+	ROUND (stat.avg_total_user_cost, 2) as avg_total_user_cost,
+	stat.user_seeks,
+	stat.user_scans,
+	-- Dynamically builds a CREATE INDEX statement from DMV suggestions.
+    -- Equality columns (=) always come before inequality columns (>, <, etc.) to improve performance
+    -- INCLUDE columns allow index to cover the full query without a table lookup.
+	'CREATE NON-CLUSTERED INDEX suggested_index_' + 
+		CONVERT (varchar, groups.index_group_handle) + '_' + 
+		CONVERT (varchar, groups.index_handle) + ' ON ' + details.statement + ' (' +
+	CASE
+		when details.equality_columns IS NOT NULL and details.inequality_columns IS NULL then details.equality_columns 
+		when details.equality_columns IS NOT NULL and details.inequality_columns IS NOT NULL then details.equality_columns + ', ' + details.inequality_columns
+		else details.inequality_columns
+	END + ')' +
+	ISNULL (' INCLUDE (' + details.included_columns + ')', '')	as IndexSuggestion
+	from sys.dm_db_missing_index_groups as groups
+inner join sys.dm_db_missing_index_group_stats as stat
+	on groups.index_group_handle = stat.group_handle
+inner join sys.dm_db_missing_index_details as details
+	on groups.index_handle = details.index_handle)
+
+select *
+from cte_missing_indexes
+where priority > @priority_threshold
+ORDER BY Priority DESC, Estimated_percent_improvement DESC;

@@ -1,29 +1,43 @@
--- =============================================
+-- =============================================================================
 -- Module 4: Missing Indexes Monitor
--- Identifies indexes SQL Server recommends based
--- on query execution patterns since last restart.
--- Adjust @priority_threshold to filter low-impact suggestions.
--- Note: DMV data resets on every SQL Server restart.
--- =============================================
+-- =============================================================================
+-- Purpose: Identifies indexes SQL Server recommends based on query execution
+--          patterns captured since the last service restart. Dynamically builds
+--          a CREATE INDEX statement for each suggestion.
+--
+-- Scope:   Instance-wide. DMVs aggregate missing index data across all databases
+--          since last restart. No iteration required.
+--
+-- Sources:
+--   sys.dm_db_missing_index_groups       - Links index handles to group handles
+--   sys.dm_db_missing_index_group_stats  - Usage stats per group: seeks, scans,
+--                                          impact, and cost used to compute priority
+--   sys.dm_db_missing_index_details      - Column-level detail: equality columns,
+--                                          inequality columns, and include columns
+--
+-- Notes:   DMV data resets on every SQL Server restart. Priority score is not
+--          an official Microsoft metric; it combines frequency and cost as a
+--          relative ranking tool only.
+-- =============================================================================
 
--- Minimum priority score to report on. Higher = more impactful.
-
-DECLARE @priority_threshold float = 75.0;
+-- =============================================================================
+-- USER CONFIGURATION - adjust thresholds to match your environment
+-- =============================================================================
+DECLARE @priority_threshold FLOAT = 75.0;  -- Minimum priority score to report. Higher = more impactful suggestions only.
+-- =============================================================================
 
 WITH cte_missing_indexes AS (
 select 
 	details.statement as table_name,
-	 -- Priority score: frequency * impact * cost. Higher = fix first.
+	 -- Priority score: (seeks + scans) * avg impact * avg cost. Higher = fix first.
 	ROUND (CAST ((stat.user_seeks + stat.user_scans) * stat.avg_user_impact * stat.avg_total_user_cost AS float), 1)  AS priority,
-	-- Estimated % improvement if index is created
-	ROUND (stat.avg_user_impact, 2) as Estimated_percent_improvement,
-	-- Average cost of queries that triggered this suggestion
-	ROUND (stat.avg_total_user_cost, 2) as avg_total_user_cost,
+	ROUND (stat.avg_user_impact, 2) as Estimated_percent_improvement,-- estimated % query improvement if index is created
+	ROUND (stat.avg_total_user_cost, 2) as avg_total_user_cost,-- average cost of queries that triggered this suggestion
 	stat.user_seeks,
 	stat.user_scans,
-	-- Dynamically builds a CREATE INDEX statement from DMV suggestions.
-    -- Equality columns (=) always come before inequality columns (>, <, etc.) to improve performance
-    -- INCLUDE columns allow index to cover the full query without a table lookup.
+	 -- Dynamically build a CREATE INDEX statement from DMV column suggestions.
+     -- Equality columns (=) always precede inequality columns (>, <) per index design best practice.
+     -- INCLUDE columns allow the index to cover the full query without a key lookup.
 	'CREATE NON-CLUSTERED INDEX suggested_index_' + 
 		CONVERT (varchar, groups.index_group_handle) + '_' + 
 		CONVERT (varchar, groups.index_handle) + ' ON ' + details.statement + ' (' +

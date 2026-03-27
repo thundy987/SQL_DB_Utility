@@ -26,6 +26,19 @@
 DECLARE @priority_threshold FLOAT = 75.0;  -- Minimum priority score to report. Higher = more impactful suggestions only.
 -- =============================================================================
 
+IF OBJECT_ID('dbo.MissingIndexMonitor') IS NOT NULL
+    DROP TABLE MissingIndexMonitor;
+
+create table MissingIndexMonitor (
+    table_name nvarchar (256),
+	priority float,
+	estimated_percent_improvement float,
+	avg_total_user_cost float,
+	user_seeks int,
+	user_scans int,
+	index_suggestion nvarchar (max)	
+);
+
 WITH cte_missing_indexes AS (
 select 
 	details.statement as table_name,
@@ -46,14 +59,31 @@ select
 		when details.equality_columns IS NOT NULL and details.inequality_columns IS NOT NULL then details.equality_columns + ', ' + details.inequality_columns
 		else details.inequality_columns
 	END + ')' +
-	ISNULL (' INCLUDE (' + details.included_columns + ')', '')	as IndexSuggestion
+	ISNULL (' INCLUDE (' + details.included_columns + ')', '')	as index_suggestion
 	from sys.dm_db_missing_index_groups as groups
 inner join sys.dm_db_missing_index_group_stats as stat
 	on groups.index_group_handle = stat.group_handle
 inner join sys.dm_db_missing_index_details as details
 	on groups.index_handle = details.index_handle)
 
-select *
+Insert into MissingIndexMonitor (
+	table_name,
+	priority,
+	estimated_percent_improvement,
+	avg_total_user_cost,
+	user_seeks,
+	user_scans,
+	index_suggestion
+)
+
+select 
+	table_name,
+	priority,
+	estimated_percent_improvement,
+	avg_total_user_cost,
+	user_seeks,
+	user_scans,
+	index_suggestion
 from cte_missing_indexes
 where priority > @priority_threshold
 ORDER BY Priority DESC, Estimated_percent_improvement DESC;

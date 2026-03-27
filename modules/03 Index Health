@@ -1,24 +1,95 @@
--- =============================================
+-- =============================================================================
 -- Module 3: Index Health Monitor
--- Reports fragmentation levels for all indexes
--- in the current database and recommends action.
--- Run against target database to assess index health.
--- =============================================
+-- =============================================================================
+-- Purpose: Reports fragmentation levels for all indexes across all databases on
+--          the instance (optionally including system databases) and recommends a
+--          maintenance action based on fragmentation thresholds.
+--
+-- Scope:   Iterates through all databases (optionally including system databases).
+--          Iteration is required because index data is stored at the database
+--          level and no DMV aggregates it across databases. A WHILE loop advances
+--          alphabetically through sys.databases to avoid gaps from dropped database IDs.
+--          Each iteration executes a dynamically built SQL string via sp_executesql.
 
-SELECT 
-    OBJECT_NAME(tbl.object_id) AS table_name,
-      -- HEAP means the table has no clustered index
-    COALESCE(i.name, 'HEAP') AS index_name,
-    ROUND(tbl.avg_fragmentation_in_percent, 1) as FragmentationPercent,
+-- Sources:
+--   sys.dm_db_index_physical_stats  - Returns fragmentation data per index;
+--                                     LIMITED mode reads only page headers,
+--                                     sufficient for fragmentation % without
+--                                     full scan overhead
+--   sys.indexes                     - Resolves index_id to index name;
+--                                     COALESCE on name handles heaps (no index)
+--   sys.databases                   - Used to drive iteration and filter system databases by name
+-- =============================================================================
+
+-- =============================================================================
+-- USER CONFIGURATION - adjust to your preferences
+-- =============================================================================
+DECLARE @include_system_dbs         BIT   = 1;    -- Set to 1 to include system databases (master, tempdb, model, msdb)
+-- =============================================================================
+
+declare @db_name nvarchar (256);
+set @db_name = (Select top 1 name from sys.databases
+WHERE (@include_system_dbs = 1 OR name not in ('master', 'model', 'msdb', 'tempdb')));
+
+IF OBJECT_ID('tempdb.dbo.#all_db_stats') IS NOT NULL
+    DROP TABLE #all_db_stats;
+
+create table #all_db_stats (
+    t_database_name nvarchar (256),
+	t_table_name nvarchar (256),
+	t_index_name nvarchar (256),
+	t_fragmentation_percent float,
+	t_recommended_action nvarchar (256),
+);
+
+While @db_name is not null
+BEGIN
+declare @sql nvarchar(max);
+
+SET @sql = N'
+WITH column_grabs AS (
+SELECT
+    ' + '''' + @db_name + '''' + ' AS database_name, -- @db_name concatenated because it cannot be referenced directly (cannot use "use")
+    OBJECT_NAME(tbl.object_id, DB_ID('+'''' + @db_name + ''''+')) AS table_name,
+    COALESCE(i.name, ''HEAP'') AS index_name, -- HEAP means the table has no clustered index
+    ROUND(tbl.avg_fragmentation_in_percent, 1) as fragmentation_percent,
     CASE 
-        WHEN tbl.avg_fragmentation_in_percent > 30 THEN 'Rebuild'
-        WHEN tbl.avg_fragmentation_in_percent > 5 THEN 'Reorganize'
-        ELSE 'OK'
-    END AS RecommendedAction
-FROM sys.dm_db_index_physical_stats(DB_ID(), NULL, NULL, NULL, 'LIMITED') AS tbl
-INNER JOIN sys.indexes AS i 
+        WHEN tbl.avg_fragmentation_in_percent > 30 THEN ''Rebuild''
+        WHEN tbl.avg_fragmentation_in_percent > 5 THEN ''Reorganize''
+        ELSE ''OK''
+    END AS recommended_action
+FROM sys.dm_db_index_physical_stats(DB_ID('+'''' + @db_name + ''''+'), NULL, NULL, NULL, ''LIMITED'') AS tbl
+INNER JOIN '+@db_name+'.sys.indexes AS i 
     ON tbl.object_id = i.object_id 
     AND tbl.index_id = i.index_id
--- Excludes healthy indexes, only returns actionable fragmentation
-WHERE tbl.avg_fragmentation_in_percent > 5
-ORDER BY tbl.avg_fragmentation_in_percent DESC;
+WHERE tbl.avg_fragmentation_in_percent > 5 -- Excludes healthy indexes, only returns actionable fragmentation
+)
+
+Insert into #all_db_stats (
+    t_database_name,
+	t_table_name,
+	t_index_name,
+	t_fragmentation_percent,
+	t_recommended_action
+)
+Select 
+    database_name,
+    table_name,
+    index_name,
+    fragmentation_percent,
+    recommended_action
+from column_grabs'
+
+EXEC sp_executesql @sql
+
+-- Advance to next database alphabetically; returns NULL when list is exhausted, ending the loop
+set @db_name =(
+Select top 1 name from sys.databases
+WHERE (@include_system_dbs = 1 
+OR name not in ('master', 'model', 'msdb', 'tempdb')) 
+and name > @db_name
+Order by name)
+END
+
+Select * from #all_db_stats
+ORDER BY t_fragmentation_percent DESC;

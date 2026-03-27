@@ -1,0 +1,85 @@
+-- =============================================================================
+-- Procedure 0: HealthCheck
+-- Purpose: Executes a suite of six (6) health check modules that target critical 
+--          aspects of SQL Server performance and maintenance: backup status, 
+--          disk space, index fragmentation, long-running queries, missing indexes, 
+--          and statistics health. Each module creates a table with results that
+--          can be queried for analysis and alerting.
+--
+-- Scope:   Instance-wide. Each module internally iterates through databases when needed.
+--
+-- Sources:
+--	dbo.usp_BackupStatus				-- Evaluates backup recency for full, differential, 
+--                                         and log backups based on user-defined thresholds.
+--	dbo.usp_diskSpaceMonitor			-- Assesses free disk space for database files and 
+--										   flags volumes below defined thresholds.
+-- 	dbo.usp_IndexFragmentationMonitor   -- Reports index fragmentation levels and recommends
+--										   maintenance actions based on thresholds.
+-- 	dbo.usp_LongRunningQueries			-- identifies currently executing queries that exceed 
+--										   defined elapsed time thresholds,
+-- 	dbo.usp_MissingIndexMonitor 		-- Identifies missing index suggestions from DMVs and 
+--                                         computes a priority score
+-- 	dbo.usp_StatisticsHealth 			-- Evaluates the health of statistics objects based on 
+--										   recency and row modifications.
+-- =============================================================================
+
+IF OBJECT_ID('dbo.usp_HealthCheck') IS NOT NULL
+	DROP PROCEDURE dbo.usp_HealthCheck;
+GO
+
+CREATE PROCEDURE dbo.usp_HealthCheck 
+	@run_backup_status_module bit, -- Set to 1 to run backup status module, 0 to skip
+	@diff_log_time int, -- Max hours allowed since last differential or log backup
+	@full_time int, -- Max hours allowed since last full backup
+
+	@run_disk_space_module bit, -- Set to 1 to run disk space module, 0 to skip
+	@include_system_dbs_disk_space bit, -- Set to 1 to include system databases (master, tempdb, model, msdb)
+	@space_warning_threshold int, -- % free space at which to trigger a WARNING alert
+	@space_critical_threshold int, -- % free space at which to trigger a CRITICAL alert
+
+	@run_index_frag_module bit, -- Set to 1 to run index fragmentation module, 0 to skip
+	@include_system_dbs_index_frag bit,	-- Set to 1 to include system databases (master, tempdb, model, msdb)
+
+	
+	@run_missing_index_module bit, -- Set to 1 to run missing index module, 0 to skip
+	@priority_threshold float, -- Minimum priority score to report. Higher = more impactful suggestions only.
+
+	@run_long_running_queries_module bit, -- Set to 1 to run long-running queries module, 0 to skip
+	@threshold_critical int, -- seconds before flagging as Critical
+	@threshold_warning int, -- seconds before flagging as Warning
+
+	@run_statistics_health_module bit, -- Set to 1 to run statistics health module, 0 to skip
+	@include_system_dbs_statistics bit, -- Set to 1 to include system databases (master, tempdb, model, msdb)
+	@percent_modified_threshold float -- Flag stats where this % or more of rows have changed since last update
+AS
+BEGIN
+
+IF @run_backup_status_module = 1
+BEGIN
+	EXEC dbo.usp_BackupStatus @diff_log_time = @diff_log_time, @full_time = @full_time;
+END
+if @run_disk_space_module = 1
+BEGIN	
+	EXEC dbo.usp_DiskSpaceMonitor @space_warning_threshold = @space_warning_threshold, @space_critical_threshold = @space_critical_threshold, @include_system_dbs_disk_space = @include_system_dbs_disk_space;
+END
+IF @run_index_frag_module = 1
+BEGIN
+	EXEC dbo.usp_IndexFragmentationMonitor @include_system_dbs_index_frag = @include_system_dbs_index_frag;
+END
+IF @run_missing_index_module = 1
+BEGIN
+	EXEC dbo.usp_MissingIndexMonitor @priority_threshold = @priority_threshold;
+END
+IF @run_long_running_queries_module = 1
+BEGIN
+	EXEC dbo.usp_LongRunningQueries @threshold_critical = @threshold_critical, @threshold_warning = @threshold_warning;
+END
+IF @run_statistics_health_module = 1
+BEGIN
+	EXEC dbo.usp_StatisticsHealth @percent_modified_threshold = @percent_modified_threshold, @include_system_dbs_statistics = @include_system_dbs_statistics;
+END
+IF @run_backup_status_module = 0 AND @run_disk_space_module = 0 AND @run_index_frag_module = 0 AND @run_missing_index_module = 0 AND @run_long_running_queries_module = 0 AND @run_statistics_health_module = 0
+BEGIN
+	PRINT 'No modules selected to run. Please set at least one @run_ parameter to 1 to execute a health check module.';
+END
+END

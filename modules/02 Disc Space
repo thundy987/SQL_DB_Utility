@@ -1,23 +1,34 @@
--- =============================================
+-- =============================================================================
 -- Module 2: Disk Space Monitor
--- Description: Reports disk volume usage and individual database file sizes
---              across all user databases (optionally including system databases).
---              Alerts when free space falls below defined thresholds.
--- Sources:     sys.databases, sys.master_files, sys.dm_os_volume_stats
--- Notes:       Volume stats (total/available GB) will repeat across rows when
---              multiple database files share the same physical drive volume.
--- =============================================
+-- =============================================================================
+-- Purpose: Reports disk volume usage and individual database file sizes.
+--          Alerts when free space on a volume falls below defined thresholds.
+--
+-- Scope:   Instance-wide. sys.master_files contains all database file paths
+--          for the instance. No iteration required.
+--
+-- Sources:
+--   sys.databases            - Database names and IDs for filtering
+--   sys.master_files         - One row per database file; provides file path,
+--                              type, and size in 8KB pages
+--   sys.dm_os_volume_stats   - Table-valued function returning volume-level
+--                              disk stats for a given database_id and file_id.
+--                              CROSS APPLY ensures one row per file.
+--
+-- Notes:   Volume stats (total/available GB) repeat across rows when multiple
+--          database files share the same physical drive volume. This is expected.
+-- =============================================================================
 
--- =============================================
--- USER CONFIGURATION - adjust thresholds to your preferences
--- =============================================
-DECLARE @include_system_dbs      BIT = 0;  -- Set to 1 to include system databases (master, tempdb, model, msdb)
-DECLARE @space_warning_threshold INT = 25; -- % free space remaining at which to trigger a WARNING alert
-DECLARE @space_critical_threshold INT = 10; -- % free space remaining at which to trigger a CRITICAL alert
+-- =============================================================================
+-- USER CONFIGURATION - adjust thresholds to match your environment
+-- =============================================================================
+DECLARE @include_system_dbs       BIT = 0;   -- Set to 1 to include system databases (master, tempdb, model, msdb)
+DECLARE @space_warning_threshold  INT = 25;  -- % free space at which to trigger a WARNING alert
+DECLARE @space_critical_threshold INT = 10;  -- % free space at which to trigger a CRITICAL alert
+-- =============================================================================
 
 -- =============================================
 -- CTE Joins sys.databases to sys.master_files to get one row per database file.
--- Converts file size from 8KB pages to MB (pages * 8 / 1024 = MB, simplified to / 128).
 -- =============================================
 
 WITH column_grabs AS(
@@ -28,7 +39,7 @@ Select
 	b.FILE_ID,
 	b.type_desc,
 	b.physical_name,
-	CAST(b.size as float)/128 as size_in_MB -- convert 8KB pages to MB
+	CAST(b.size as float)/128 as size_in_MB -- convert 8KB pages to MB (pages * 8 / 1024 = pages / 128)
 From sys.databases as a
 left join sys.master_files as b
 	on a.database_id = b.database_id
@@ -55,6 +66,5 @@ Select
 		else 'OK'		
 	end as drive_space_alert
 From column_grabs as c
-cross apply sys.dm_os_volume_stats(database_id, c.file_id) as dmv
--- Filter system databases (database_id 1-4) base on user config
-WHERE (@include_system_dbs = 1 OR c.database_id > 4)
+cross apply sys.dm_os_volume_stats(database_id, c.file_id) as dmv -- returns volume stats for the physical drive hosting each file
+WHERE (@include_system_dbs = 1 OR c.database_id > 4) -- Filter system databases base on user config

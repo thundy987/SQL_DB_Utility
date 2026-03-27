@@ -31,6 +31,21 @@ DECLARE @space_critical_threshold INT = 10;  -- % free space at which to trigger
 -- CTE Joins sys.databases to sys.master_files to get one row per database file.
 -- =============================================
 
+IF OBJECT_ID('dbo.DiscSpaceMonitor') IS NOT NULL
+    DROP TABLE DiscSpaceMonitor;
+
+create table DiscSpaceMonitor (
+    database_name nvarchar (256),
+	database_id int,
+	type_desc nvarchar (50),
+	file_size_in_mb float,
+	file_path nvarchar (500),
+	total_volume_in_gb decimal(10,2),
+	total_volume_available_in_gb decimal(10,2),
+	percent_drive_space_available float,
+	drive_space_alert nvarchar (100)
+);
+
 WITH column_grabs AS(
 Select 
 	a.name,
@@ -43,6 +58,18 @@ Select
 From sys.databases as a
 left join sys.master_files as b
 	on a.database_id = b.database_id
+)
+
+Insert Into DiscSpaceMonitor (
+	database_name,
+	database_id,
+	type_desc,
+	file_size_in_mb ,
+	file_path,
+	total_volume_in_gb,
+	total_volume_available_in_gb,
+	percent_drive_space_available ,
+	drive_space_alert
 )
 
 -- =============================================

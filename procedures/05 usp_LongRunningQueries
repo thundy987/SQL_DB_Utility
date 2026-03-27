@@ -1,0 +1,103 @@
+-- =============================================================================
+-- Procedure 5: LongRunningQueries
+-- =============================================================================
+-- Purpose: Identifies currently executing queries that exceed defined elapsed
+--          time thresholds. Returns session details, resource consumption, and
+--          the associated SQL text to aid in performance troubleshooting.
+--
+-- Scope:   Instance-wide. DMVs reflect active requests at time of execution.
+--          System background tasks with no associated SQL text (NULL sql_handle)
+--          are excluded by CROSS APPLY behavior; this module targets query
+--          performance, not internal SQL Server processes.
+--
+-- Sources:
+--   sys.dm_exec_requests  - Active requests currently executing on the instance
+--   sys.dm_exec_sessions  - Session-level details including login name and memory
+--   sys.databases         - Resolves database_id to a readable database name
+--   sys.dm_exec_sql_text  - Table-valued function returning SQL text for a given
+--                           sql_handle; CROSS APPLY drops rows with NULL sql_handle
+--
+-- Notes:
+--   - total_elapsed_time is stored in milliseconds; divided by 1000 here to
+--     match user-defined threshold units (seconds)
+--   - memory_usage in dm_exec_sessions is expressed as number of 8KB pages
+--   - @@SPID filter excludes the session running this query from results
+
+-- Parameters:
+-- @threshold_critical INT;  -- seconds before flagging as Critical
+-- @threshold_warning  INT;  -- seconds before flagging as Warning
+-- =============================================================================
+
+if OBJECT_ID('dbo.usp_LongRunningQueries') IS NOT NULL
+	drop procedure dbo.usp_LongRunningQueries;
+GO
+
+CREATE PROCEDURE dbo.usp_LongRunningQueries
+	@threshold_critical INT,
+	@threshold_warning  INT
+AS
+BEGIN
+
+IF OBJECT_ID('dbo.LongRunningQueries') IS NOT NULL
+    DROP TABLE LongRunningQueries;
+
+create table LongRunningQueries (
+	alert_flag nvarchar (100),
+	login_name nvarchar (256),
+	total_elapsed_time int,
+	status nvarchar (50),
+	command nvarchar (50),
+	database_name nvarchar (256),
+	percent_complete float,
+	cpu_time int,
+	logical_reads bigint,
+	writes bigint,
+	no_of_8kb_pages_of_memory_used int,
+	row_count bigint,
+	blocking_session_id int,
+	query_text nvarchar (max)
+);
+
+Insert into LongRunningQueries (
+	alert_flag,
+	login_name,
+	total_elapsed_time,
+	status,
+	command,
+	database_name,
+	percent_complete,
+	cpu_time,
+	logical_reads,
+	writes,
+	no_of_8kb_pages_of_memory_used,
+	row_count,
+	blocking_session_id ,
+	query_text
+)
+Select
+	CASE
+		when (a.total_elapsed_time/1000) >= (@threshold_critical) then 'Critical - query running longer than 1 minute'
+		when (a.total_elapsed_time/1000) between @threshold_warning and @threshold_critical - 1 then 'Warning - query running longer than 30 seconds'
+		else 'OK'
+	END as alert_flag,
+	b.login_name,
+	a.total_elapsed_time,
+	a.status,
+	a.command,
+	c.name as database_name,
+	a.percent_complete,
+	a.cpu_time,	
+	a.logical_reads,
+	a.writes,
+	b.memory_usage as no_of_8kb_pages_of_memory_used,
+	a.row_count,
+	a.blocking_session_id,		
+	d.text as query_text	
+From sys.dm_exec_requests as a
+inner join sys.dm_exec_sessions as b
+	on a.session_id = b.session_id
+inner join sys.databases as c
+	on a.database_id = c.database_id
+cross apply sys.dm_exec_sql_text(a.sql_handle) as d -- excludes rows where sql_handle is NULL (system background tasks)
+WHERE a.session_ID != @@SPID -- Exclude the session running this query
+END

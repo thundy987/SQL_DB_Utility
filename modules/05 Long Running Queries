@@ -5,34 +5,36 @@
 --          time thresholds. Returns session details, resource consumption, and
 --          the associated SQL text to aid in performance troubleshooting.
 --
--- Scope:   User and application-submitted T-SQL requests only. System background
---          tasks with no associated SQL text (NULL sql_handle) are intentionally
---          excluded by the CROSS APPLY behavior, as this module is focused on
---          query performance rather than internal SQL Server processes.
+-- Scope:   Instance-wide. DMVs reflect active requests at time of execution.
+--          System background tasks with no associated SQL text (NULL sql_handle)
+--          are excluded by CROSS APPLY behavior; this module targets query
+--          performance, not internal SQL Server processes.
+--
 -- Sources:
 --   sys.dm_exec_requests  - Active requests currently executing on the instance
 --   sys.dm_exec_sessions  - Session-level details including login name and memory
 --   sys.databases         - Resolves database_id to a readable database name
 --   sys.dm_exec_sql_text  - Table-valued function returning SQL text for a given
---                           sql_handle. CROSS APPLY excludes NULL sql_handle rows.
+--                           sql_handle; CROSS APPLY drops rows with NULL sql_handle
+--
 -- Notes:
---   - total_elapsed_time is stored in milliseconds. Divided by 1000 here to
---     match user-defined threshold units (seconds).
---   - memory_usage from dm_exec_sessions is expressed as number of 8KB pages.
---   - @@SPID filter excludes the session running this query from results.
---   - Results ordered by elapsed time descending to identify longest runners first.
+--   - total_elapsed_time is stored in milliseconds; divided by 1000 here to
+--     match user-defined threshold units (seconds)
+--   - memory_usage in dm_exec_sessions is expressed as number of 8KB pages
+--   - @@SPID filter excludes the session running this query from results
 -- =============================================================================
 
--- =============================================
--- USER CONFIGURATION - adjust thresholds to your preferences
--- =============================================
-declare @threshold_critical int = 60; -- enter time in seconds
-declare @threshold_warning int = 30; -- enter time in seconds
+-- =============================================================================
+-- USER CONFIGURATION - adjust thresholds to match your environment
+-- =============================================================================
+DECLARE @threshold_critical INT = 60;  -- seconds before flagging as Critical
+DECLARE @threshold_warning  INT = 30;  -- seconds before flagging as Warning
+-- =============================================================================
 
 Select
 	CASE
 		when (a.total_elapsed_time/1000) >= (@threshold_critical) then 'Critical - query running longer than 1 minute'
-		when (a.total_elapsed_time/1000) between @threshold_warning and @threshold_critical then 'Warning - query running longer than 30 seconds'
+		when (a.total_elapsed_time/1000) between @threshold_warning and @threshold_critical - 1 then 'Warning - query running longer than 30 seconds'
 		else 'OK'
 	END as alert_flag,
 	b.login_name,
@@ -53,7 +55,6 @@ inner join sys.dm_exec_sessions as b
 	on a.session_id = b.session_id
 inner join sys.databases as c
 	on a.database_id = c.database_id
-cross apply sys.dm_exec_sql_text(a.sql_handle) as d
-WHERE 
-    a.session_ID != @@SPID -- Exclude the session running this query
+cross apply sys.dm_exec_sql_text(a.sql_handle) as d -- excludes rows where sql_handle is NULL (system background tasks)
+WHERE a.session_ID != @@SPID -- Exclude the session running this query
 ORDER BY a.total_elapsed_time desc;

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Module 3: Index Health Monitor
+-- Module 3: Index Fragmentation Monitor
 -- =============================================================================
 -- Purpose: Reports fragmentation levels for all indexes across all databases on
 --          the instance (optionally including system databases) and recommends a
@@ -31,10 +31,10 @@ declare @db_name nvarchar (256);
 set @db_name = (Select top 1 name from sys.databases
 WHERE (@include_system_dbs = 1 OR name not in ('master', 'model', 'msdb', 'tempdb')));
 
-IF OBJECT_ID('tempdb.dbo.#all_db_stats') IS NOT NULL
-    DROP TABLE #all_db_stats;
+IF OBJECT_ID('dbo.IndexFragmentationMonitor') IS NOT NULL
+    DROP TABLE IndexFragmentationMonitor;
 
-create table #all_db_stats (
+create table IndexFragmentationMonitor (
     t_database_name nvarchar (256),
 	t_table_name nvarchar (256),
 	t_index_name nvarchar (256),
@@ -65,7 +65,7 @@ INNER JOIN '+@db_name+'.sys.indexes AS i
 WHERE tbl.avg_fragmentation_in_percent > 5 -- Excludes healthy indexes, only returns actionable fragmentation
 )
 
-Insert into #all_db_stats (
+Insert into IndexFragmentationMonitor (
     t_database_name,
 	t_table_name,
 	t_index_name,
@@ -91,5 +91,5 @@ and name > @db_name
 Order by name)
 END
 
-Select * from #all_db_stats
+Select * from IndexFragmentationMonitor
 ORDER BY t_fragmentation_percent DESC;

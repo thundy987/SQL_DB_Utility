@@ -1,0 +1,42 @@
+-- =============================================================================
+-- Sample Health Check
+-- Purpose:       Demonstrates how to execute the HealthCheck stored procedure and 
+--                offers some default values that you are welcome to change as you see fit.
+--
+-- Prerequisites: You must have the seven (7) stored procedures created in your database 
+--                before running this script. Consider creating a new, empty database for reporting.
+
+-- Setup Notes:   Make sure this script is aimed at the database where the stored procedures are.
+--                This script will create a table for each of the six (6) modules that are 
+--                enabled when you run this query. 
+--
+-- Notes:         You may re-run this query as needed and the existing tables will be dropped
+--                and re-created with fresh data.
+--
+-- =============================================================================
+
+exec dbo.usp_HealthCheck 
+
+	@run_backup_status_module = 1,		   -- (Bit) Set to 1 to run backup status module, 0 to skip
+	@diff_log_time = 2,				       -- (Int) Max hours allowed since last differential or log backup
+	@full_time = 12,					   -- (Int) Max hours allowed since last full backup
+
+	@run_disk_space_module = 1,			   -- (Bit) Set to 1 to run disk space module, 0 to skip
+	@include_system_dbs_disk_space = 1,    -- (bit) Set to 1 to include system databases (master, tempdb, model, msdb)
+	@space_warning_threshold = 25,         -- (int) % free space at which to trigger a WARNING alert
+	@space_critical_threshold = 10,        -- (int) % free space at which to trigger a CRITICAL alert
+
+	@run_index_frag_module = 1,			   -- (bit) Set to 1 to run index fragmentation module, 0 to skip
+	@include_system_dbs_index_frag =1,     -- (bit) Set to 1 to include system databases (master, tempdb, model, msdb)
+
+	
+	@run_missing_index_module = 1,		   -- (Bit) Set to 1 to run missing index module, 0 to skip
+	@priority_threshold = 80,			   -- (Float) Minimum priority score to report. Higher = more impactful suggestions only.
+
+	@run_long_running_queries_module = 1,  -- (Bit) Set to 1 to run long-running queries module, 0 to skip
+	@threshold_warning = 30,			   -- (Int) seconds before flagging as Warning
+	@threshold_critical = 60,			   -- (Int) seconds before flagging as Critical	
+
+	@run_statistics_health_module = 1,	   -- (Bit) Set to 1 to run statistics health module, 0 to skip
+	@include_system_dbs_statistics =1,     -- (Bit) Set to 1 to include system databases (master, tempdb, model, msdb)
+	@percent_modified_threshold = 30       -- (Float) Flag stats where this % or more of rows have changed since last update

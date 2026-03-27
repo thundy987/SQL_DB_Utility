@@ -31,6 +31,42 @@ DECLARE @threshold_critical INT = 60;  -- seconds before flagging as Critical
 DECLARE @threshold_warning  INT = 30;  -- seconds before flagging as Warning
 -- =============================================================================
 
+IF OBJECT_ID('dbo.LongRunningQueries') IS NOT NULL
+    DROP TABLE LongRunningQueries;
+
+create table LongRunningQueries (
+	alert_flag nvarchar (100),
+	login_name nvarchar (256),
+	total_elapsed_time int,
+	status nvarchar (50),
+	command nvarchar (50),
+	database_name nvarchar (256),
+	percent_complete float,
+	cpu_time int,
+	logical_reads bigint,
+	writes bigint,
+	no_of_8kb_pages_of_memory_used int,
+	row_count bigint,
+	blocking_session_id int,
+	query_text nvarchar (max)
+);
+
+Insert into LongRunningQueries (
+	alert_flag,
+	login_name,
+	total_elapsed_time,
+	status,
+	command,
+	database_name,
+	percent_complete,
+	cpu_time,
+	logical_reads,
+	writes,
+	no_of_8kb_pages_of_memory_used,
+	row_count,
+	blocking_session_id ,
+	query_text
+)
 Select
 	CASE
 		when (a.total_elapsed_time/1000) >= (@threshold_critical) then 'Critical - query running longer than 1 minute'

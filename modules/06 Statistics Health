@@ -34,10 +34,10 @@ declare @db_name nvarchar (256);
 set @db_name = (Select top 1 name from sys.databases
 WHERE (@include_system_dbs = 1 OR name not in ('master', 'model', 'msdb', 'tempdb')));
 
-IF OBJECT_ID('tempdb.dbo.#all_db_stats') IS NOT NULL
-    DROP TABLE #all_db_stats;
+IF OBJECT_ID('dbo.StatisticsHealth') IS NOT NULL
+    DROP TABLE StatisticsHealth;
 
-create table #all_db_stats (
+create table StatisticsHealth (
 	t_database_name nvarchar (256),
 	t_schema_name nvarchar (256),
 	t_table_name nvarchar (256),
@@ -79,7 +79,7 @@ inner join ' +@db_name+ '.sys.objects AS c
 	ON a.object_id = c.object_id
 )
 
-Insert into #all_db_stats(
+Insert into StatisticsHealth(
 t_database_name,
 	t_schema_name,
 	t_table_name,
@@ -120,5 +120,5 @@ and name > @db_name
 Order by name)
 END
 
-select * from #all_db_stats
+select * from StatisticsHealth
 Order by t_percent_rows_modified_since_last_stats_update desc, t_hours_since_last_stats_update desc;

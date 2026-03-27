@@ -1,24 +1,29 @@
--- ============================================================
--- MODULE 1: Backup Status
--- ============================================================
--- Checks backup health across all databases on the instance.
--- Surfaces: last full/differential/log backup per database,
--- time since each backup type, and an alert status flag.
+
+-- =============================================================================
+-- Module 1: Backup Status
+-- =============================================================================
+-- Purpose: Checks backup health across all databases on the instance.
+--          Surfaces last full/differential/log backup per database,
+--          time since each backup type, and an alert status flag.
+--
+-- Scope:   Instance-wide. Pulls from msdb.dbo.backupset which aggregates
+--          backup history for all databases. No iteration required.
 --
 -- Sources:
---   msdb.dbo.backupset   - backup history
---   sys.databases        - recovery model per database
--- ============================================================
+--   msdb.dbo.backupset  - Backup history records including type and finish date
+--   sys.databases       - Master list of databases including recovery model;
+--                         LEFT JOIN ensures databases with no backup history appear
+-- =============================================================================
 
--- ============================================================
--- USER CONFIGURATION -- adjust thresholds to match your environment
--- ============================================================
-DECLARE @diff_log_time int = 2;   -- Max hours allowed since last differential or log backup
-DECLARE @full_time     int = 12;  -- Max hours allowed since last full backup
--- ============================================================
+-- =============================================================================
+-- USER CONFIGURATION - adjust thresholds to match your environment
+-- =============================================================================
+DECLARE @diff_log_time INT = 2;   -- Max hours allowed since last differential or log backup
+DECLARE @full_time     INT = 12;  -- Max hours allowed since last full backup
+-- =============================================================================
 
 WITH backup_info AS (
--- Aggregate most recent backup date per database per backup type
+-- Aggregate most recent backup finish date per database per backup type
 Select 
 	database_name,
 	MAX (
@@ -43,8 +48,7 @@ FROM msdb.dbo.backupset
 GROUP BY database_name),
 
 backup_details AS(
-	-- Join to sys.databases to include all databases (even those never backed up)
-	-- and bring in recovery model for alert flag logic
+	-- LEFT JOIN preserves databases that have never been backed up (bi columns will be NULL)
 Select 
 	d.name as database_name,
 	d.recovery_model_desc,
@@ -62,9 +66,8 @@ Left join backup_info as bi
 select 
 	*,
 	CASE
-		-- tempdb cannot be backed up, skip it
+		-- tempdb cannot be backed up
 		WHEN database_name = 'tempdb' THEN 'Ok'
-		-- No full backup on record
 		when last_full_backup_date is null then 'Full backup never taken!'
 		-- FULL recovery model requires frequent log or differential backups
 		when recovery_model_desc = 'FULL' and (hours_since_differential_backup > @diff_log_time or hours_since_log_backup > @diff_log_time) then 'Take a log backup'

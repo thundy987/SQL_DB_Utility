@@ -1,0 +1,103 @@
+-- =============================================================================
+-- Procedure 2: diskSpaceMonitor
+-- =============================================================================
+-- Purpose: Reports disk volume usage and individual database file sizes.
+--          Alerts when free space on a volume falls below defined thresholds.
+--
+-- Scope:   Instance-wide. sys.master_files contains all database file paths
+--          for the instance. No iteration required.
+--
+-- Sources:
+--   sys.databases            - Database names and IDs for filtering
+--   sys.master_files         - One row per database file; provides file path,
+--                              type, and size in 8KB pages
+--   sys.dm_os_volume_stats   - Table-valued function returning volume-level
+--                              disk stats for a given database_id and file_id.
+--                              CROSS APPLY ensures one row per file.
+--
+-- Parameters:
+-- @include_system_dbs_disk_space_disk_space bit;  -- Set to 1 to include system databases (master, tempdb, model, msdb)
+-- @space_warning_threshold int;                   -- % free space at which to trigger a WARNING alert
+-- @space_critical_threshold int;                  -- % free space at which to trigger a CRITICAL alert
+-- =============================================================================
+
+IF OBJECT_ID('dbo.usp_DiskSpaceMonitor') IS NOT NULL
+	drop procedure dbo.usp_DiskSpaceMonitor;
+GO
+
+CREATE PROCEDURE dbo.usp_DiskSpaceMonitor
+	@include_system_dbs_disk_space bit,  
+	@space_warning_threshold int,  
+	@space_critical_threshold int
+AS
+BEGIN
+
+-- =============================================
+-- CTE Joins sys.databases to sys.master_files to get one row per database file.
+-- =============================================
+
+IF OBJECT_ID('dbo.DiskSpaceMonitor') IS NOT NULL
+    DROP TABLE DiskSpaceMonitor;
+
+create table DiskSpaceMonitor (
+    database_name nvarchar (256),
+	database_id int,
+	type_desc nvarchar (50),
+	file_size_in_mb float,
+	file_path nvarchar (500),
+	total_volume_in_gb decimal(10,2),
+	total_volume_available_in_gb decimal(10,2),
+	percent_drive_space_available float,
+	drive_space_alert nvarchar (100)
+);
+
+WITH column_grabs AS(
+Select 
+	a.name,
+	a.database_id,
+	a.physical_database_name,
+	b.FILE_ID,
+	b.type_desc,
+	b.physical_name,
+	CAST(b.size as float)/128 as size_in_MB -- convert 8KB pages to MB (pages * 8 / 1024 = pages / 128)
+From sys.databases as a
+left join sys.master_files as b
+	on a.database_id = b.database_id
+)
+
+Insert Into DiskSpaceMonitor (
+	database_name,
+	database_id,
+	type_desc,
+	file_size_in_mb ,
+	file_path,
+	total_volume_in_gb,
+	total_volume_available_in_gb,
+	percent_drive_space_available ,
+	drive_space_alert
+)
+
+-- =============================================
+-- CROSS APPLY feeds each file's database_id and file_id into
+-- sys.dm_os_volume_stats, which returns the physical disk volume
+-- stats for the drive that file resides on.
+-- =============================================
+Select 
+	c.name as database_name,
+	c.database_id,
+	c.type_desc,
+	c.size_in_MB as file_size_in_MB,
+	c.physical_name as file_path,
+	CAST(ROUND(dmv.total_bytes / 1024.0 / 1024.0 / 1024.0, 2) AS DECIMAL(10,2)) as total_volume_in_GB, -- convert bytes to GB and round to 2 decimal places
+	CAST(ROUND(dmv.available_bytes / 1024.0 / 1024.0 / 1024.0, 2) AS DECIMAL(10,2)) as volume_available_in_GB,
+	round(CAST(dmv.available_bytes as float) / CAST(dmv.total_bytes as float) * 100, 2) as percent_drive_space_available,
+	-- Alert flag based on % free space remaining on the physical volume
+	case
+		when round(CAST(dmv.available_bytes as float) / CAST(dmv.total_bytes as float) * 100, 2) <= @space_critical_threshold then 'Critical - check drive space immediately'
+		when round(CAST(dmv.available_bytes as float) / CAST(dmv.total_bytes as float) * 100, 2) between @space_critical_threshold and @space_warning_threshold then 'Warning - check drive space'
+		else 'OK'		
+	end as drive_space_alert
+From column_grabs as c
+cross apply sys.dm_os_volume_stats(database_id, c.file_id) as dmv -- returns volume stats for the physical drive hosting each file
+WHERE (@include_system_dbs_disk_space = 1 OR c.database_id > 4) -- Filter system databases base on user config
+END

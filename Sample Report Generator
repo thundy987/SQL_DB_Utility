@@ -12,31 +12,36 @@
 --
 -- Notes:         You may re-run this query as needed and the existing tables will be dropped
 --                and re-created with fresh data.
+--                Each module can be turned on off by adjusting the parameters before execution.
 --
 -- =============================================================================
 
 exec dbo.usp_HealthCheck 
-
+--  BackupStatus Module Parameters
 	@run_backup_status_module = 1,		   -- (Bit) Set to 1 to run backup status module, 0 to skip
 	@diff_log_time = 2,				       -- (Int) Max hours allowed since last differential or log backup
 	@full_time = 12,					   -- (Int) Max hours allowed since last full backup
 
+-- DiskSpaceMonitor Module Parameters
 	@run_disk_space_module = 1,			   -- (Bit) Set to 1 to run disk space module, 0 to skip
 	@include_system_dbs_disk_space = 1,    -- (bit) Set to 1 to include system databases (master, tempdb, model, msdb)
 	@space_warning_threshold = 25,         -- (int) % free space at which to trigger a WARNING alert
 	@space_critical_threshold = 10,        -- (int) % free space at which to trigger a CRITICAL alert
 
+-- IndexFragmentationMonitor Module Parameters
 	@run_index_frag_module = 1,			   -- (bit) Set to 1 to run index fragmentation module, 0 to skip
 	@include_system_dbs_index_frag =1,     -- (bit) Set to 1 to include system databases (master, tempdb, model, msdb)
 
-	
+-- MissingIndexMonitor Module Parameters	
 	@run_missing_index_module = 1,		   -- (Bit) Set to 1 to run missing index module, 0 to skip
 	@priority_threshold = 80,			   -- (Float) Minimum priority score to report. Higher = more impactful suggestions only.
 
+-- LongRunningQueries Module Parameters
 	@run_long_running_queries_module = 1,  -- (Bit) Set to 1 to run long-running queries module, 0 to skip
 	@threshold_warning = 30,			   -- (Int) seconds before flagging as Warning
 	@threshold_critical = 60,			   -- (Int) seconds before flagging as Critical	
 
+-- StatisticsHealth Module Parameters
 	@run_statistics_health_module = 1,	   -- (Bit) Set to 1 to run statistics health module, 0 to skip
 	@include_system_dbs_statistics =1,     -- (Bit) Set to 1 to include system databases (master, tempdb, model, msdb)
 	@percent_modified_threshold = 30       -- (Float) Flag stats where this % or more of rows have changed since last update

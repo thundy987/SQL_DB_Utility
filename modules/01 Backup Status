@@ -22,6 +22,21 @@ DECLARE @diff_log_time INT = 2;   -- Max hours allowed since last differential o
 DECLARE @full_time     INT = 12;  -- Max hours allowed since last full backup
 -- =============================================================================
 
+IF OBJECT_ID('dbo.BackupStatus') IS NOT NULL
+    DROP TABLE BackupStatus;
+
+create table BackupStatus (
+    database_name nvarchar (256),
+	recovery_model_desc nvarchar (50),
+	last_full_backup_date datetime,
+	last_differential_backup datetime,
+	last_full_log_date datetime,
+	hours_since_full_backup int,
+	hours_since_differential_backup int,
+	hours_since_log_backup int,
+	backup_alert_status nvarchar (50)	
+);
+
 WITH backup_info AS (
 -- Aggregate most recent backup finish date per database per backup type
 Select 
@@ -62,9 +77,27 @@ from sys.databases as d
 Left join backup_info as bi
 	on d.name = bi.database_name)
 
+Insert into BackupStatus (
+    database_name,
+	recovery_model_desc,
+	last_full_backup_date,
+	last_differential_backup,
+	last_full_log_date,
+	hours_since_full_backup,
+	hours_since_differential_backup,
+	hours_since_log_backup ,
+	backup_alert_status	
+)
 -- Final output with alert flag
 select 
-	*,
+	 database_name,
+	recovery_model_desc,
+	last_full_backup_date,
+	last_differential_backup,
+	last_full_log_date,
+	hours_since_full_backup,
+	hours_since_differential_backup,
+	hours_since_log_backup,
 	CASE
 		-- tempdb cannot be backed up
 		WHEN database_name = 'tempdb' THEN 'Ok'

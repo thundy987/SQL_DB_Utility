@@ -1,5 +1,7 @@
 # SQL_DB_Utility
-### A set of SQL stored procedures that detect performance issues, maintenance needs, and potential risk factors, and logs them to a central reporting database.
+As a SOLIDWORKS PDM Data Management Specialist, I am regularly checking the health of customer's environments, which includes checking their database health and performance. SOLIDWORKS has a Status Report tool that has been very helpful in this task, but there's a couple things missing from it and I wanted to know more about how it might pull its' information from the SQL Server instance.
+
+This tool is a result of me wanting to practice and improve my T-SQL skills by creating something that would be useful for an administrator of SQL database. It's a diagnostic set of SQL stored procedures that detect performance issues, maintenance needs, and potential risk factors, and logs them to a central reporting database.
 
 ## This utility offers the following modules:
 ### Backup Status
@@ -21,5 +23,6 @@ Evaluates statistics staleness across all databases on the instance. Orders resu
 - Save/create the stored procedures to that database
 - Open the Sample Report Generator query and modify the values as you see fit.
 - Run the query against your new database (be advised that it will create tables in whatever db you are working in).
+- Once you have your preferred thresholds dialed in, there is also a SQL Agent Weekly Job Setup Script that you may use to run this tool weekly. Simply configure your preferences at the top.
 
 

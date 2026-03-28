@@ -1,0 +1,115 @@
+-- =============================================================================
+-- Weekly SQL Agent Job Creation Script for dbo.usp_HealthCheck
+-- Purpose:       To create a SQL Agent Job that executs dbo.usp_HealthCheck with all modules 
+--				  enabled on a weekly basis. This allows for automated health checks of the instance.
+--
+-- Prerequisites: You must have the seven (7) stored procedures created in your database 
+--                before running this script. Consider creating a new, empty database for reporting.
+
+-- Setup Notes:   This script will create a table for each of the six (6) modules that are 
+--                enabled when you run this query. 
+--
+-- Notes:         Each module can be turned on off by adjusting the parameters INSIDE the COMMAND 
+--                block of this script before execution.
+--
+-- =============================================================================
+
+-- =============================================================================
+-- USER CONFIGURATION
+-- =============================================================================
+
+Declare @owner_login_name nvarchar (100) = N'SQL\Administrator'; -- SQL login that will own and execute the job. Must have appropriate permissions to execute dbo.usp_HealthCheck and access related data.
+Declare @server_name nvarchar (100) = N'SQL\DBA'; -- Name of the server where the job will be created. Enter your server/instance name here.
+Declare @database_name nvarchar(100) = N'master'; -- Name of the database where the dbo.usp_HealthCheck stored procedures are stored.
+Declare @job_description NVARCHAR(200) = 'Executes ' + @database_name + '.dbo.usp_HealthCheck with all modules activated.'; -- Description of the job that will appear in SQL Agent. Adjust as needed.
+
+Declare @active_start_date int = 20260328; -- The start date of the Job schedule in the form YYYYMMDD
+Declare @active_end_date int = 99991231; -- The end date of the Job schedule leave as 99991231 to make it "indefinite" or define the range in the form YYYYMMDD
+Declare @freq_interval int = 64 -- Which day of the week should the job run? 1 = Sunday, 2 = Monday, 4 = Tuesday, 8 = Wednesday, 16 = Thursday, 32 = Friday, 64 = Saturday
+Declare @active_start_time int = 000000; -- The time of day that the Job fires in the form of HHMMSS. This example is set to midnight (12:00 AM).
+-- =============================================================================
+
+USE [msdb]
+
+DECLARE @jobId BINARY(16)
+EXEC  msdb.dbo.sp_add_job @job_name=N'Weekly DB Health Check', 
+		@enabled=1, 
+		@notify_level_eventlog=0, 
+		@notify_level_email=2, 
+		@notify_level_page=2, 
+		@delete_level=0, 
+		@description=@job_description, 
+		@category_name=N'[Uncategorized (Local)]', 
+		@owner_login_name=@owner_login_name, @job_id = @jobId OUTPUT
+select @jobId
+
+EXEC msdb.dbo.sp_add_jobserver @job_name=N'Weekly DB Health Check', @server_name = @server_name
+
+EXEC msdb.dbo.sp_add_jobstep @job_name=N'Weekly DB Health Check', @step_name=N'Execute all modules', 
+		@step_id=1, 
+		@cmdexec_success_code=0, 
+		@on_success_action=1, 
+		@on_fail_action=2, 
+		@retry_attempts=0, 
+		@retry_interval=0, 
+		@os_run_priority=0, @subsystem=N'TSQL', 
+		@command=N'exec dbo.usp_HealthCheck 
+--  BackupStatus Module Parameters
+	@run_backup_status_module = 1,		 
+	@diff_log_time = 2,				    
+	@full_time = 12,					
+
+-- DiskSpaceMonitor Module Parameters
+	@run_disk_space_module = 1,			   
+	@include_system_dbs_disk_space = 1,   
+	@space_warning_threshold = 25,        
+	@space_critical_threshold = 10,    
+
+-- IndexFragmentationMonitor Module Parameters
+	@run_index_frag_module = 1,			   
+	@include_system_dbs_index_frag =1,    
+
+-- MissingIndexMonitor Module Parameters	
+	@run_missing_index_module = 1,		  
+	@priority_threshold = 80,			  
+
+-- LongRunningQueries Module Parameters
+	@run_long_running_queries_module = 1,  
+	@threshold_warning = 30,			
+	@threshold_critical = 60,			 
+
+-- StatisticsHealth Module Parameters
+	@run_statistics_health_module = 1,	
+	@include_system_dbs_statistics =1,   
+	@percent_modified_threshold = 30     ', 
+		@database_name= @database_name, 
+		@flags=0
+
+EXEC msdb.dbo.sp_update_job @job_name=N'Weekly DB Health Check', 
+		@enabled=1, 
+		@start_step_id=1, 
+		@notify_level_eventlog=0, 
+		@notify_level_email=2, 
+		@notify_level_page=2, 
+		@delete_level=0, 
+		@description=@job_description, 
+		@category_name=N'[Uncategorized (Local)]', 
+		@owner_login_name=@owner_login_name, 
+		@notify_email_operator_name=N'', 
+		@notify_page_operator_name=N''
+
+DECLARE @schedule_id int
+EXEC msdb.dbo.sp_add_jobschedule @job_name=N'Weekly DB Health Check', @name=N'Weekly DB Health Check', 
+		@enabled=1, 
+		@freq_type=8, 
+		@freq_interval=@freq_interval, 
+		@freq_subday_type=1, 
+		@freq_subday_interval=0, 
+		@freq_relative_interval=0, 
+		@freq_recurrence_factor=1, 
+		@active_start_date=@active_start_date, 
+		@active_end_date=@active_end_date, 
+		@active_start_time=@active_start_time, 
+		@active_end_time=235959, @schedule_id = @schedule_id OUTPUT
+select @schedule_id
+GO

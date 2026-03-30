@@ -26,10 +26,12 @@ CREATE PROCEDURE dbo.usp_BackupStatus
 	@full_time int
 AS
 BEGIN
-IF OBJECT_ID('dbo.BackupStatus') IS NOT NULL
-    DROP TABLE BackupStatus;
 
+IF OBJECT_ID('dbo.BackupStatus') IS NULL
+BEGIN
 create table BackupStatus (
+	backup_status_id int identity(1,1) primary key,
+	scan_date datetime default getdate(),
     database_name nvarchar (256),
 	recovery_model_desc nvarchar (50),
 	last_full_backup_date datetime,
@@ -40,6 +42,7 @@ create table BackupStatus (
 	hours_since_log_backup int,
 	backup_alert_status nvarchar (50)	
 );
+END;
 
 WITH backup_info AS (
 -- Aggregate most recent backup finish date per database per backup type
@@ -82,7 +85,7 @@ Left join backup_info as bi
 	on d.name = bi.database_name)
 
 Insert into BackupStatus (
-    database_name,
+	database_name,
 	recovery_model_desc,
 	last_full_backup_date,
 	last_differential_backup,
@@ -94,7 +97,7 @@ Insert into BackupStatus (
 )
 -- Final output with alert flag
 select 
-	 database_name,
+	database_name,
 	recovery_model_desc,
 	last_full_backup_date,
 	last_differential_backup,

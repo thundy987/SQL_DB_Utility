@@ -1,7 +1,7 @@
 # SQL_DB_Utility
 As a SOLIDWORKS PDM Data Management Specialist, I am regularly checking the health of customer's environments, which includes checking their database health and performance. SOLIDWORKS has a Status Report tool that has been very helpful in this task, but there's a couple things missing from it and I wanted to know more about how it might pull its' information from the SQL Server instance.
 
-This tool is a result of me wanting to practice and improve my T-SQL skills by creating something that would be useful for an administrator of SQL database. It's a diagnostic set of SQL stored procedures that detect performance issues, maintenance needs, and potential risk factors, and logs them to a central reporting database.
+This tool is a result of me wanting to practice and improve my T-SQL skills by creating something that would be useful for an administrator of SQL databases. It's a diagnostic set of SQL stored procedures that detect performance issues, maintenance needs, and potential risk factors, and logs them to a central reporting database.
 ### Key Challenges
 1. Learning how to query and combine DMVS was interesting because I had never used a table value function in a join before. Some of the information I needed lived at the db level and some at the instance level which led to the next challenge. This forced me to learn about Cross and Outer Apply statements instead of regular joins.
 2. I was determined to make all of the modules report at an instance level for all dbs, but this meant that I had to iterate my query logic somehow. I ended up using a WHILE loop with Dynamic SQL (because I couldn't just say something like "USE @DbName) because this let me pass in variables to the executed sql string. I looped over db name instead of db_id to avoid issues with gaps from deleted dbs on the instance. Learning about SQL injection and how to write Dynamic SQL was the biggest challenge in this project and I look forward to practicing it in other projects to cement my understanding of it.
@@ -45,10 +45,10 @@ It was tested on the following databases:
 
 ## AI Usage Disclaimer
 - I used Claude as a mentor for this project.
-- It was forbidden from directly providing me with code. I had to write all code myself (it wouldn't even help me write my comments or this README - bastard).
+- It was forbidden from directly providing me with code. I had to write all code myself (it helped me write the opening comments on the first module I completed, I copied the formatting for the rest).
 - I instructed Claude to act as a senior SQL Server and data engineer whose role is to teach me by nudging, not giving answers.
 - Whenever I asked it a question, it would ask me leading questions, subtly pointing me where to look in the MS docs.
-- It was my "rubber duck" to help reason through problems and constantly challening my assertions to make sure I could explain my reasoning for decisions.
+- It was my "rubber duck" to help reason through problems and it constantly challened my assertions to make sure I could explain my reasoning for decisions.
   
 ### Potential Project Improvements
 This tool was not designed to replace established SQL monitoring platforms like SolarWinds, but some obvious gaps in its' capabilities include:

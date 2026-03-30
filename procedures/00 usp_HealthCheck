@@ -3,7 +3,7 @@
 -- Purpose: Executes a suite of six (6) health check modules that target critical 
 --          aspects of SQL Server performance and maintenance: backup status, 
 --          disk space, index fragmentation, long-running queries, missing indexes, 
---          and statistics health. Each module creates a table with results that
+--          and statistics health. Each module creates a table with results where
 --          can be queried for analysis and alerting.
 --
 -- Scope:   Instance-wide. Each module internally iterates through databases when needed.
@@ -25,6 +25,24 @@
 
 IF OBJECT_ID('dbo.usp_HealthCheck') IS NOT NULL
 	DROP PROCEDURE dbo.usp_HealthCheck;
+GO
+
+
+-----------------------------------------------------------------------------------------------------------------------
+IF OBJECT_ID('dbo.ErrorLog') IS NULL
+BEGIN
+   create table ErrorLog(
+	ErrorID INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    ErrorDateTime DATETIME DEFAULT GETDATE(),
+	ErrorModuleName NVARCHAR(128),
+    ErrorNumber INT,
+    ErrorSeverity INT,
+    ErrorState INT,
+    ErrorProcedure NVARCHAR(128),
+    ErrorLine INT,
+    ErrorMessage NVARCHAR(4000)
+   );
+END
 GO
 
 CREATE PROCEDURE dbo.usp_HealthCheck 
@@ -60,12 +78,26 @@ BEGIN
 		EXEC dbo.usp_BackupStatus @diff_log_time = @diff_log_time, @full_time = @full_time;
 	END TRY
 	BEGIN CATCH
-		Select
-			ERROR_NUMBER() AS error_number,
-			ERROR_STATE() AS error_state,
-			ERROR_PROCEDURE() AS error_procedure,
-			ERROR_LINE() AS error_line,
-			ERROR_MESSAGE() AS error_message;
+		INSERT INTO dbo.ErrorLog (
+			ErrorModuleName,
+			ErrorNumber,
+			ErrorDateTime,
+			ErrorSeverity,
+			ErrorState,
+			ErrorProcedure,
+			ErrorLine,
+			ErrorMessage
+		)
+		SELECT
+			'usp_BackupStatus' as ErrorModuleName,
+			ERROR_NUMBER(),
+			GETDATE() as ErrorDateTime,
+			ERROR_SEVERITY(),
+			ERROR_STATE(),
+			ERROR_PROCEDURE(),
+			ERROR_LINE(),
+			ERROR_MESSAGE();
+		PRINT ' error has occured with usp_BackupStatus module and has been added to dbo.ErrorLog';
 	END CATCH
 END
 if @run_disk_space_module = 1
@@ -74,12 +106,26 @@ BEGIN
 	EXEC dbo.usp_DiskSpaceMonitor @space_warning_threshold = @space_warning_threshold, @space_critical_threshold = @space_critical_threshold, @include_system_dbs_disk_space = @include_system_dbs_disk_space;
 	END TRY
 	BEGIN CATCH
-		Select
-			ERROR_NUMBER() AS error_number,
-			ERROR_STATE() AS error_state,
-			ERROR_PROCEDURE() AS error_procedure,
-			ERROR_LINE() AS error_line,
-			ERROR_MESSAGE() AS error_message;
+		INSERT INTO dbo.ErrorLog (
+			ErrorModuleName,
+			ErrorNumber,
+			ErrorDateTime,
+			ErrorSeverity,
+			ErrorState,
+			ErrorProcedure,
+			ErrorLine,
+			ErrorMessage
+		)
+		SELECT
+			'usp_DiskSpaceMonitor' as ErrorModuleName,
+			ERROR_NUMBER(),
+			GETDATE() as ErrorDateTime,
+			ERROR_SEVERITY(),
+			ERROR_STATE(),
+			ERROR_PROCEDURE(),
+			ERROR_LINE(),
+			ERROR_MESSAGE();
+		PRINT ' error has occured with usp_DiskSpaceMonitor module and has been added to dbo.ErrorLog';
 	END CATCH
 END
 IF @run_index_frag_module = 1
@@ -88,12 +134,26 @@ BEGIN
 	EXEC dbo.usp_IndexFragmentationMonitor @include_system_dbs_index_frag = @include_system_dbs_index_frag;
 	END TRY
 	BEGIN CATCH
-		Select
-			ERROR_NUMBER() AS error_number,
-			ERROR_STATE() AS error_state,
-			ERROR_PROCEDURE() AS error_procedure,
-			ERROR_LINE() AS error_line,
-			ERROR_MESSAGE() AS error_message;
+		INSERT INTO dbo.ErrorLog (
+			ErrorModuleName,
+			ErrorNumber,
+			ErrorDateTime,
+			ErrorSeverity,
+			ErrorState,
+			ErrorProcedure,
+			ErrorLine,
+			ErrorMessage
+		)
+		SELECT
+			'usp_IndexFragmentationMonitor' as ErrorModuleName,
+			ERROR_NUMBER(),
+			GETDATE() as ErrorDateTime,
+			ERROR_SEVERITY(),
+			ERROR_STATE(),
+			ERROR_PROCEDURE(),
+			ERROR_LINE(),
+			ERROR_MESSAGE();
+		PRINT ' error has occured with usp_IndexFragmentationMonitor module and has been added to dbo.ErrorLog';
 	END CATCH
 END
 IF @run_missing_index_module = 1
@@ -102,12 +162,26 @@ BEGIN
 	EXEC dbo.usp_MissingIndexMonitor @priority_threshold = @priority_threshold;
 	END TRY
 	BEGIN CATCH
-		Select
-			ERROR_NUMBER() AS error_number,
-			ERROR_STATE() AS error_state,
-			ERROR_PROCEDURE() AS error_procedure,
-			ERROR_LINE() AS error_line,
-			ERROR_MESSAGE() AS error_message;
+		INSERT INTO dbo.ErrorLog (
+			ErrorModuleName,
+			ErrorNumber,
+			ErrorDateTime,
+			ErrorSeverity,
+			ErrorState,
+			ErrorProcedure,
+			ErrorLine,
+			ErrorMessage
+		)
+		SELECT
+			'usp_MissingIndexMonitor' as ErrorModuleName,
+			ERROR_NUMBER(),
+			GETDATE() as ErrorDateTime,
+			ERROR_SEVERITY(),
+			ERROR_STATE(),
+			ERROR_PROCEDURE(),
+			ERROR_LINE(),
+			ERROR_MESSAGE();
+		PRINT ' error has occured with usp_MissingIndexMonitor module and has been added to dbo.ErrorLog';
 	END CATCH
 END
 IF @run_long_running_queries_module = 1
@@ -116,12 +190,26 @@ BEGIN
 	EXEC dbo.usp_LongRunningQueries @threshold_critical = @threshold_critical, @threshold_warning = @threshold_warning;
 	END TRY
 	BEGIN CATCH
-		Select
-			ERROR_NUMBER() AS error_number,
-			ERROR_STATE() AS error_state,
-			ERROR_PROCEDURE() AS error_procedure,
-			ERROR_LINE() AS error_line,
-			ERROR_MESSAGE() AS error_message;
+		INSERT INTO dbo.ErrorLog (
+			ErrorModuleName,
+			ErrorNumber,
+			ErrorDateTime,
+			ErrorSeverity,
+			ErrorState,
+			ErrorProcedure,
+			ErrorLine,
+			ErrorMessage
+		)
+		SELECT
+			'usp_LongRunningQueries' as ErrorModuleName,
+			ERROR_NUMBER(),
+			GETDATE() as ErrorDateTime,
+			ERROR_SEVERITY(),
+			ERROR_STATE(),
+			ERROR_PROCEDURE(),
+			ERROR_LINE(),
+			ERROR_MESSAGE();
+		PRINT ' error has occured with usp_LongRunningQueries module and has been added to dbo.ErrorLog';
 	END CATCH
 END
 IF @run_statistics_health_module = 1
@@ -130,12 +218,26 @@ BEGIN
 	EXEC dbo.usp_StatisticsHealth @percent_modified_threshold = @percent_modified_threshold, @include_system_dbs_statistics = @include_system_dbs_statistics;
 	END TRY
 	BEGIN CATCH
-		Select
-			ERROR_NUMBER() AS error_number,
-			ERROR_STATE() AS error_state,
-			ERROR_PROCEDURE() AS error_procedure,
-			ERROR_LINE() AS error_line,
-			ERROR_MESSAGE() AS error_message;
+		INSERT INTO dbo.ErrorLog (
+			ErrorModuleName,
+			ErrorNumber,
+			ErrorDateTime,
+			ErrorSeverity,
+			ErrorState,
+			ErrorProcedure,
+			ErrorLine,
+			ErrorMessage
+		)
+		SELECT
+			'usp_StatisticsHealth' as ErrorModuleName,
+			ERROR_NUMBER(),
+			GETDATE() as ErrorDateTime,
+			ERROR_SEVERITY(),
+			ERROR_STATE(),
+			ERROR_PROCEDURE(),
+			ERROR_LINE(),
+			ERROR_MESSAGE();
+		PRINT ' error has occured with usp_StatisticsHealth module and has been added to dbo.ErrorLog';
 	END CATCH
 END
 IF @run_backup_status_module = 0 AND @run_disk_space_module = 0 AND @run_index_frag_module = 0 AND @run_missing_index_module = 0 AND @run_long_running_queries_module = 0 AND @run_statistics_health_module = 0

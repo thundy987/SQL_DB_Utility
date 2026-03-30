@@ -38,10 +38,11 @@ CREATE PROCEDURE dbo.usp_LongRunningQueries
 AS
 BEGIN
 
-IF OBJECT_ID('dbo.LongRunningQueries') IS NOT NULL
-    DROP TABLE LongRunningQueries;
-
+IF OBJECT_ID('dbo.LongRunningQueries') IS NULL
+BEGIN
 create table LongRunningQueries (
+	long_running_query_id int identity(1,1) primary key,
+	scan_date datetime default getdate(),
 	alert_flag nvarchar (100),
 	login_name nvarchar (256),
 	total_elapsed_time int,
@@ -55,8 +56,12 @@ create table LongRunningQueries (
 	no_of_8kb_pages_of_memory_used int,
 	row_count bigint,
 	blocking_session_id int,
+	wait_resource nvarchar(256),
+	wait_type nvarchar(256),
+	wait_time int,
 	query_text nvarchar (max)
 );
+END;
 
 Insert into LongRunningQueries (
 	alert_flag,
@@ -71,7 +76,10 @@ Insert into LongRunningQueries (
 	writes,
 	no_of_8kb_pages_of_memory_used,
 	row_count,
-	blocking_session_id ,
+	blocking_session_id,
+	wait_resource,
+	wait_type,
+	wait_time,
 	query_text
 )
 Select
@@ -91,7 +99,10 @@ Select
 	a.writes,
 	b.memory_usage as no_of_8kb_pages_of_memory_used,
 	a.row_count,
-	a.blocking_session_id,		
+	a.blocking_session_id,
+	a.wait_resource,
+	a.wait_type,
+	a.wait_time,
 	d.text as query_text	
 From sys.dm_exec_requests as a
 inner join sys.dm_exec_sessions as b

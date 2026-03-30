@@ -23,21 +23,14 @@ To report at the instance level across all databases, I needed to iterate query 
 </details>
 
 <details>
-<summary><strong>3. Living in the MS Docs</strong></summary>
+<summary><strong>3. CTE Scope Limitations and Benefits</strong></summary>
 
-As my first SQL project, I had many documentation tabs open constantly for concepts and syntax lookups.
-
-</details>
-
-<details>
-<summary><strong>4. Incremental Building</strong></summary>
-
-I learned to start with base joins and raw columns, then add column-level aggregations, unit conversions, and casts. Realizing that "oh crap", I can't reference column aliases in `GROUP BY` led me to break logic out into CTEs.
+I learned to start with base joins and raw columns, then add column-level aggregations, unit conversions, and casts. I quickly realized "oh crap", I can't consume/reference an aggregate result in the same `SELECT` that produces it. This led me to using a CTE to create a separate scope so the aggregate result could be used in other operations. This was a requirement in Module 1 (Backup Status) and I reused the CTE logic in other modules for readability and consistency.
 
 </details>
 
 <details>
-<summary><strong>5. Plain English First</strong></summary>
+<summary><strong>4. Plain English First</strong></summary>
 
 My biggest takeaway: writing down exactly what I want in plain English before writing a single line of T-SQL makes everything easier.
 

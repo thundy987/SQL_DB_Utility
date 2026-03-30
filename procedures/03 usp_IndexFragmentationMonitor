@@ -36,16 +36,18 @@ declare @db_name nvarchar (256);
 set @db_name = (Select top 1 name from sys.databases
 WHERE (@include_system_dbs_index_frag = 1 OR name not in ('master', 'model', 'msdb', 'tempdb')));
 
-IF OBJECT_ID('dbo.IndexFragmentationMonitor') IS NOT NULL
-    DROP TABLE IndexFragmentationMonitor;
-
+IF OBJECT_ID('dbo.IndexFragmentationMonitor') IS NULL
+BEGIN
 create table IndexFragmentationMonitor (
+    t_index_frag_id int identity(1,1) primary key,
+    t_scan_date datetime default getdate(),
     t_database_name nvarchar (256),
 	t_table_name nvarchar (256),
 	t_index_name nvarchar (256),
 	t_fragmentation_percent float,
 	t_recommended_action nvarchar (256),
 );
+END;
 
 While @db_name is not null
 BEGIN

@@ -31,10 +31,11 @@ CREATE PROCEDURE dbo.usp_MissingIndexMonitor
 AS
 BEGIN
 
-IF OBJECT_ID('dbo.MissingIndexMonitor') IS NOT NULL
-    DROP TABLE MissingIndexMonitor;
-
+IF OBJECT_ID('dbo.MissingIndexMonitor') IS NULL
+BEGIN
 create table MissingIndexMonitor (
+	missing_index_id int identity(1,1) primary key,
+	scan_date datetime default getdate(),
     table_name nvarchar (256),
 	priority float,
 	estimated_percent_improvement float,
@@ -43,6 +44,7 @@ create table MissingIndexMonitor (
 	user_scans int,
 	index_suggestion nvarchar (max)	
 );
+END;
 
 WITH cte_missing_indexes AS (
 select 

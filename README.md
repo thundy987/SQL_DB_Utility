@@ -3,7 +3,7 @@ As a SOLIDWORKS PDM Data Management Specialist, I am regularly checking the heal
 
 This tool is a result of me wanting to practice and improve my T-SQL skills by creating something that would be useful for an administrator of SQL databases. It's a diagnostic set of SQL stored procedures that detect performance issues, maintenance needs, and potential risk factors, and logs them to a central reporting database where results are timestamped and have a unique primary key.
 
-### Key Challenges
+### Technical Challenges and Lessons
 1. Learning how to query and combine DMVS was interesting because I had never used a table value function in a join before. Some of the information I needed lived at the db level and some at the instance level which led to the next challenge. This forced me to learn about Cross and Outer Apply statements instead of regular joins.
 2. I was determined to make all of the modules report at an instance level for all dbs, but this meant that I had to iterate my query logic somehow. I ended up using a WHILE loop with Dynamic SQL (because I couldn't just say something like "USE @DbName) because this let me pass in variables to the executed sql string. I looped over db name instead of db_id to avoid issues with gaps from deleted dbs on the instance. Learning about SQL injection and how to write Dynamic SQL was the biggest challenge in this project and I look forward to practicing it in other projects to cement my understanding of it.
 3. As my first project creating something in SQL, I felt like I LIVED in the MS docs. Constantly having many tabs open to different concepts and syntax lookups.

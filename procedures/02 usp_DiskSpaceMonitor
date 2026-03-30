@@ -1,5 +1,5 @@
 -- =============================================================================
--- Procedure 2: diskSpaceMonitor
+-- Procedure 2: DiskSpaceMonitor
 -- =============================================================================
 -- Purpose: Reports disk volume usage and individual database file sizes.
 --          Alerts when free space on a volume falls below defined thresholds.
@@ -32,14 +32,11 @@ CREATE PROCEDURE dbo.usp_DiskSpaceMonitor
 AS
 BEGIN
 
--- =============================================
--- CTE Joins sys.databases to sys.master_files to get one row per database file.
--- =============================================
-
-IF OBJECT_ID('dbo.DiskSpaceMonitor') IS NOT NULL
-    DROP TABLE DiskSpaceMonitor;
-
+IF OBJECT_ID('dbo.DiskSpaceMonitor') IS NULL
+BEGIN
 create table DiskSpaceMonitor (
+	disc_space_monitor_id int identity(1,1) primary key,
+	scan_date datetime default getdate(),
     database_name nvarchar (256),
 	database_id int,
 	type_desc nvarchar (50),
@@ -50,6 +47,9 @@ create table DiskSpaceMonitor (
 	percent_drive_space_available float,
 	drive_space_alert nvarchar (100)
 );
+END;
+
+-- CTE Joins sys.databases to sys.master_files to get one row per database file.
 
 WITH column_grabs AS(
 Select 

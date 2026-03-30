@@ -1,13 +1,15 @@
 # SQL_DB_Utility
 As a SOLIDWORKS PDM Data Management Specialist, I am regularly checking the health of customer's environments, which includes checking their database health and performance. SOLIDWORKS has a Status Report tool that has been very helpful in this task, but there's a couple things missing from it and I wanted to know more about how it might pull its' information from the SQL Server instance.
 
-This tool is a result of me wanting to practice and improve my T-SQL skills by creating something that would be useful for an administrator of SQL databases. It's a diagnostic set of SQL stored procedures that detect performance issues, maintenance needs, and potential risk factors, and logs them to a central reporting database.
+This tool is a result of me wanting to practice and improve my T-SQL skills by creating something that would be useful for an administrator of SQL databases. It's a diagnostic set of SQL stored procedures that detect performance issues, maintenance needs, and potential risk factors, and logs them to a central reporting database where results are timestamped and have a unique primary key.
+
 ### Key Challenges
 1. Learning how to query and combine DMVS was interesting because I had never used a table value function in a join before. Some of the information I needed lived at the db level and some at the instance level which led to the next challenge. This forced me to learn about Cross and Outer Apply statements instead of regular joins.
 2. I was determined to make all of the modules report at an instance level for all dbs, but this meant that I had to iterate my query logic somehow. I ended up using a WHILE loop with Dynamic SQL (because I couldn't just say something like "USE @DbName) because this let me pass in variables to the executed sql string. I looped over db name instead of db_id to avoid issues with gaps from deleted dbs on the instance. Learning about SQL injection and how to write Dynamic SQL was the biggest challenge in this project and I look forward to practicing it in other projects to cement my understanding of it.
 3. As my first project creating something in SQL, I felt like I LIVED in the MS docs. Constantly having many tabs open to different concepts and syntax lookups.
 4. I quickly to build up incrementally. Start with base joins and pulling the raw columns I need. Then start doing column-level aggregrations as needed, converting/casting units and data types. Realizing that oh crap, I can't reference that column alias in my GROUP BY statement or something, and having to split out into a CTE (or multiple).
 5. My biggest takeaway is that it always helps to write down exactly what I want or what I'm trying to do in plain English first before trying to write a single line of T-SQL.
+
 ## This utility offers the following modules:
 ### Backup Status
 Checks backup health across all databases on the instance. Highlights last full/differential/log backup per database, time since each backup type, and an alert status flag.
@@ -53,6 +55,5 @@ It was tested on the following databases:
 ### Potential Project Improvements
 This tool was not designed to replace established SQL monitoring platforms like SolarWinds, but some obvious gaps in its' capabilities include:
 - Alerting mechanisms for issues
-- Historical records. currently all the reporting tables are dropped and recreated every run instead of appending them for over-time analysis.
 - SQL Agent Job monitoring to checked for failed or long-running jobs etc.
 - Test this utility in other versions of SQL server to ensure compatibility.

@@ -41,10 +41,11 @@ declare @db_name nvarchar (256);
 set @db_name = (Select top 1 name from sys.databases
 WHERE (@include_system_dbs_statistics = 1 OR name not in ('master', 'model', 'msdb', 'tempdb')));
 
-IF OBJECT_ID('dbo.StatisticsHealth') IS NOT NULL
-    DROP TABLE StatisticsHealth;
-
+IF OBJECT_ID('dbo.StatisticsHealth') IS NULL
+BEGIN
 create table StatisticsHealth (
+	t_statistics_health_id int identity(1,1) primary key,
+	t_scan_date datetime default getdate(),
 	t_database_name nvarchar (256),
 	t_schema_name nvarchar (256),
 	t_table_name nvarchar (256),
@@ -56,6 +57,7 @@ create table StatisticsHealth (
 	t_percent_rows_modified_since_last_stats_update float,
 	t_stats_ever_updated_flag nvarchar (100)
 );
+END;
 
 While @db_name is not null
 BEGIN

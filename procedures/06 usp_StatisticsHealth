@@ -1,31 +1,8 @@
--- =============================================================================
--- Procedure 6: StatisticsHealth
--- =============================================================================
--- Purpose: Evaluates statistics staleness across all databases on the instance.
---          Orders results by modification percentage to surface the most at-risk
---          tables first. Also flags statistics that have never been computed.
---
--- Scope:   Iterates through all databases (optionally including system databases).
---          Iteration is required because statistics data is stored at the database
---          level and no DMV aggregates it across databases. A WHILE loop advances
---          alphabetically through sys.databases to avoid gaps from dropped database IDs.
---          Each iteration executes a dynamically built SQL string via sp_executesql.
---
--- Sources:
---   sys.stats                    - One row per statistics object per table
---   sys.dm_db_stats_properties   - Instance-level function returning computation
---                                  metadata per stats object (last updated, rows,
---                                  modification counter). Returns NULL columns for
---                                  never-computed stats rather than dropping the row,
---                                  so CROSS APPLY is safe here.
---   sys.databases                - Used to drive iteration and filter system databases by name
---   sys.objects                  - Connects statistics objects to their parent table
---                                  to resolve schema and table name
---
--- Parameters:
--- @include_system_dbs_statistics BIT; -- Set to 1 to include system databases (master, tempdb, model, msdb)
--- @percent_modified_threshold FLOAT;  -- Flag stats where this % or more of rows have changed since last update
--- =============================================================================
+-- =============================================
+-- Description: Evaluates statistics staleness across all databases.
+--              Flags never-updated stats and those exceeding a modification
+--              threshold. Iterates databases dynamically via sp_executesql.
+-- =============================================
 
 if OBJECT_ID('dbo.usp_StatisticsHealth') IS NOT NULL
 	drop procedure dbo.usp_StatisticsHealth;

@@ -1,26 +1,10 @@
--- =============================================================================
--- Procedure 4: MissingIndexesMonitor
--- =============================================================================
--- Purpose: Identifies indexes SQL Server recommends based on query execution
---          patterns captured since the last service restart. Dynamically builds
---          a CREATE INDEX statement for each suggestion.
---
--- Scope:   Instance-wide. DMVs aggregate missing index data across all databases
---          since last restart. No iteration required.
---
--- Sources:
---   sys.dm_db_missing_index_groups       - Links index handles to group handles
---   sys.dm_db_missing_index_group_stats  - Usage stats per group: seeks, scans,
---                                          impact, and cost used to compute priority
---   sys.dm_db_missing_index_details      - Column-level detail: equality columns,
---                                          inequality columns, and include columns
---
--- Notes:   DMV data resets on every SQL Server restart. Priority score is not
---          an official Microsoft metric; it combines frequency and cost as a
---          relative ranking tool only.
--- Parameters:
--- @priority_threshold FLOAT; -- Minimum priority score to report. Higher = more impactful suggestions only.
--- =============================================================================
+-- =============================================
+-- Description: Identifies missing indexes recommended by SQL Server based on
+--              query patterns since last service restart. Builds a suggested
+--              CREATE INDEX statement for each result.
+-- Note:        Priority score is a custom metric, not an official Microsoft value.
+--              DMV data resets on SQL Server restart.
+-- =============================================
 
 if OBJECT_ID('dbo.usp_MissingIndexMonitor') IS NOT NULL
 	drop procedure dbo.usp_MissingIndexMonitor;
@@ -51,8 +35,8 @@ select
 	details.statement as table_name,
 	 -- Priority score: (seeks + scans) * avg impact * avg cost. Higher = fix first.
 	ROUND (CAST ((stat.user_seeks + stat.user_scans) * stat.avg_user_impact * stat.avg_total_user_cost AS float), 1)  AS priority,
-	ROUND (stat.avg_user_impact, 2) as Estimated_percent_improvement,-- estimated % query improvement if index is created
-	ROUND (stat.avg_total_user_cost, 2) as avg_total_user_cost,-- average cost of queries that triggered this suggestion
+	ROUND (stat.avg_user_impact, 2) as Estimated_percent_improvement,
+	ROUND (stat.avg_total_user_cost, 2) as avg_total_user_cost,
 	stat.user_seeks,
 	stat.user_scans,
 	 -- Dynamically build a CREATE INDEX statement from DMV column suggestions.

@@ -1,28 +1,8 @@
--- =============================================================================
--- Procedure 3: IndexFragmentationMonitor
--- =============================================================================
--- Purpose: Reports fragmentation levels for all indexes across all databases on
---          the instance (optionally including system databases) and recommends a
---          maintenance action based on fragmentation thresholds.
---
--- Scope:   Iterates through all databases (optionally including system databases).
---          Iteration is required because index data is stored at the database
---          level and no DMV aggregates it across databases. A WHILE loop advances
---          alphabetically through sys.databases to avoid gaps from dropped database IDs.
---          Each iteration executes a dynamically built SQL string via sp_executesql.
---
--- Sources:
---   sys.dm_db_index_physical_stats  - Returns fragmentation data per index;
---                                     LIMITED mode reads only page headers,
---                                     sufficient for fragmentation % without
---                                     full scan overhead
---   sys.indexes                     - Resolves index_id to index name;
---                                     COALESCE on name handles heaps (no index)
---   sys.databases                   - Used to drive iteration and filter system databases by name
---
--- Parameters:
--- @include_system_dbs_index_frag bit;  -- Set to 1 to include system databases (master, tempdb, model, msdb)
--- =============================================================================
+-- =============================================
+-- Description: Reports index fragmentation across all databases.
+--              Recommends rebuild or reorganize based on fragmentation thresholds.
+--              Iterates databases dynamically via sp_executesql.
+-- =============================================
 
 if OBJECT_ID('dbo.usp_IndexFragmentationMonitor') IS NOT NULL
 	drop procedure dbo.usp_IndexFragmentationMonitor;

@@ -1,23 +1,11 @@
--- =============================================================================
--- Weekly SQL Agent Job Creation Script for dbo.usp_HealthCheck
--- Purpose:       To create a SQL Agent Job that executs dbo.usp_HealthCheck with all modules 
---				  enabled on a weekly basis. This allows for automated health checks of the instance.
---
--- Prerequisites: You must have the seven (7) stored procedures created in your database 
---                before running this script. Consider creating a new, empty database for reporting.
+-- =============================================
+-- Description: Creates a weekly SQL Agent job to execute usp_HealthCheck
+--              with all modules enabled. Configure the USER CONFIGURATION
+--              block before running.
+-- Prerequisites: All seven stored procedures must exist in the target database.
+-- =============================================
 
--- Setup Notes:   This script will create a table for each of the six (6) modules that are 
---                enabled when you run this query. 
---
--- Notes:         Each module can be turned on off by adjusting the parameters INSIDE the COMMAND 
---                block of this script before execution.
---
--- =============================================================================
-
--- =============================================================================
 -- USER CONFIGURATION
--- =============================================================================
-
 Declare @owner_login_name nvarchar (100) = N'SQL\Administrator'; -- SQL login that will own and execute the job. Must have appropriate permissions to execute dbo.usp_HealthCheck and access related data.
 Declare @server_name nvarchar (100) = N'SQL\DBA'; -- Name of the server where the job will be created. Enter your server/instance name here.
 Declare @database_name nvarchar(100) = N'master'; -- Name of the database where the dbo.usp_HealthCheck stored procedures are stored.

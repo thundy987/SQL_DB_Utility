@@ -1,32 +1,7 @@
--- =============================================================================
--- Procedure 5: LongRunningQueries
--- =============================================================================
--- Purpose: Identifies currently executing queries that exceed defined elapsed
---          time thresholds. Returns session details, resource consumption, and
---          the associated SQL text to aid in performance troubleshooting.
---
--- Scope:   Instance-wide. DMVs reflect active requests at time of execution.
---          System background tasks with no associated SQL text (NULL sql_handle)
---          are excluded by CROSS APPLY behavior; this module targets query
---          performance, not internal SQL Server processes.
---
--- Sources:
---   sys.dm_exec_requests  - Active requests currently executing on the instance
---   sys.dm_exec_sessions  - Session-level details including login name and memory
---   sys.databases         - Resolves database_id to a readable database name
---   sys.dm_exec_sql_text  - Table-valued function returning SQL text for a given
---                           sql_handle; CROSS APPLY drops rows with NULL sql_handle
---
--- Notes:
---   - total_elapsed_time is stored in milliseconds; divided by 1000 here to
---     match user-defined threshold units (seconds)
---   - memory_usage in dm_exec_sessions is expressed as number of 8KB pages
---   - @@SPID filter excludes the session running this query from results
-
--- Parameters:
--- @threshold_critical INT;  -- seconds before flagging as Critical
--- @threshold_warning  INT;  -- seconds before flagging as Warning
--- =============================================================================
+-- =============================================
+-- Description: Captures currently executing queries exceeding defined time
+--              thresholds. Returns session details, resource usage, and SQL text.
+-- =============================================
 
 if OBJECT_ID('dbo.usp_LongRunningQueries') IS NOT NULL
 	drop procedure dbo.usp_LongRunningQueries;

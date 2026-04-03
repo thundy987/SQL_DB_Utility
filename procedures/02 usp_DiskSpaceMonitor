@@ -1,25 +1,7 @@
--- =============================================================================
--- Procedure 2: DiskSpaceMonitor
--- =============================================================================
--- Purpose: Reports disk volume usage and individual database file sizes.
---          Alerts when free space on a volume falls below defined thresholds.
---
--- Scope:   Instance-wide. sys.master_files contains all database file paths
---          for the instance. No iteration required.
---
--- Sources:
---   sys.databases            - Database names and IDs for filtering
---   sys.master_files         - One row per database file; provides file path,
---                              type, and size in 8KB pages
---   sys.dm_os_volume_stats   - Table-valued function returning volume-level
---                              disk stats for a given database_id and file_id.
---                              CROSS APPLY ensures one row per file.
---
--- Parameters:
--- @include_system_dbs_disk_space_disk_space bit;  -- Set to 1 to include system databases (master, tempdb, model, msdb)
--- @space_warning_threshold int;                   -- % free space at which to trigger a WARNING alert
--- @space_critical_threshold int;                  -- % free space at which to trigger a CRITICAL alert
--- =============================================================================
+-- =============================================
+-- Description: Reports disk volume usage and database file sizes.
+--              Alerts when free space falls below defined thresholds.
+-- =============================================
 
 IF OBJECT_ID('dbo.usp_DiskSpaceMonitor') IS NOT NULL
 	drop procedure dbo.usp_DiskSpaceMonitor;
@@ -77,11 +59,6 @@ Insert Into DiskSpaceMonitor (
 	drive_space_alert
 )
 
--- =============================================
--- CROSS APPLY feeds each file's database_id and file_id into
--- sys.dm_os_volume_stats, which returns the physical disk volume
--- stats for the drive that file resides on.
--- =============================================
 Select 
 	c.name as database_name,
 	c.database_id,

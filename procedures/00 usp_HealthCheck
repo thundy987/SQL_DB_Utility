@@ -1,27 +1,9 @@
--- =============================================================================
--- Procedure 0: HealthCheck
--- Purpose: Executes a suite of six (6) health check modules that target critical 
---          aspects of SQL Server performance and maintenance: backup status, 
---          disk space, index fragmentation, long-running queries, missing indexes, 
---          and statistics health. Each module creates a table with results where
---          can be queried for analysis and alerting.
---
--- Scope:   Instance-wide. Each module internally iterates through databases when needed.
---
--- Sources:
---	dbo.usp_BackupStatus				-- Evaluates backup recency for full, differential, 
---                                         and log backups based on user-defined thresholds.
---	dbo.usp_diskSpaceMonitor			-- Assesses free disk space for database files and 
---										   flags volumes below defined thresholds.
--- 	dbo.usp_IndexFragmentationMonitor   -- Reports index fragmentation levels and recommends
---										   maintenance actions based on thresholds.
--- 	dbo.usp_LongRunningQueries			-- identifies currently executing queries that exceed 
---										   defined elapsed time thresholds,
--- 	dbo.usp_MissingIndexMonitor 		-- Identifies missing index suggestions from DMVs and 
---                                         computes a priority score
--- 	dbo.usp_StatisticsHealth 			-- Evaluates the health of statistics objects based on 
---										   recency and row modifications.
--- =============================================================================
+-- =============================================
+-- Description: Orchestrates the SQL Server health check suite. Executes any
+--              combination of six modules based on input flags. Errors per
+--              module are caught and logged to dbo.ErrorLog without halting
+--              remaining modules.
+-- =============================================
 
 IF OBJECT_ID('dbo.usp_HealthCheck') IS NOT NULL
 	DROP PROCEDURE dbo.usp_HealthCheck;

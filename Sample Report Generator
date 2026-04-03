@@ -1,20 +1,8 @@
--- =============================================================================
--- Sample Health Check
--- Purpose:       Demonstrates how to execute the HealthCheck stored procedure and 
---                offers some default values that you are welcome to change as you see fit.
---
--- Prerequisites: You must have the seven (7) stored procedures created in your database 
---                before running this script. Consider creating a new, empty database for reporting.
-
--- Setup Notes:   Make sure this script is aimed at the database where the stored procedures are.
---                This script will create a table for each of the six (6) modules that are 
---                enabled when you run this query. 
---
--- Notes:         You may re-run this query as needed and the existing tables will be dropped
---                and re-created with fresh data.
---                Each module can be turned on off by adjusting the parameters before execution.
---
--- =============================================================================
+-- =============================================
+-- Description: Sample execution of usp_HealthCheck with suggested default values.
+--              Adjust parameters as needed before running.
+-- Prerequisites: All seven stored procedures must exist in the target database.
+-- =============================================
 
 exec dbo.usp_HealthCheck 
 --  BackupStatus Module Parameters
